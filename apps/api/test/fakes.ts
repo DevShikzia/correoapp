@@ -1,3 +1,8 @@
+import type {
+  CreateStaffSessionInput,
+  StaffSessionRecord,
+  StaffSessionsRepository,
+} from '../src/modules/auth/auth-sessions.repository.js';
 import type { AuditEntryInput, AuditRepository } from '../src/modules/audit/audit.repository.js';
 import type {
   CreateLotRecordInput,
@@ -185,6 +190,15 @@ export function createStaffRepositoryFake(seed: StaffUserRecord[] = []): StaffRe
       return updated;
     },
 
+    async touchLastLogin(id: string): Promise<void> {
+      const record = records.get(id);
+      if (record === undefined) {
+        return;
+      }
+
+      records.set(id, { ...record, lastLoginAt: new Date(), updatedAt: new Date() });
+    },
+
     async countActiveAdmins(excludingId?: string): Promise<number> {
       return [...records.values()].filter(
         (record) =>
@@ -192,6 +206,59 @@ export function createStaffRepositoryFake(seed: StaffUserRecord[] = []): StaffRe
           record.active &&
           (excludingId === undefined || record.id !== excludingId),
       ).length;
+    },
+  };
+}
+
+export interface StaffSessionsRepositoryFake extends StaffSessionsRepository {
+  records: Map<string, StaffSessionRecord>;
+}
+
+export function createStaffSessionsRepositoryFake(
+  seed: StaffSessionRecord[] = [],
+): StaffSessionsRepositoryFake {
+  const records = new Map(seed.map((record) => [record.id, record]));
+  let sequence = records.size;
+
+  return {
+    records,
+
+    async create(input: CreateStaffSessionInput): Promise<StaffSessionRecord> {
+      sequence += 1;
+      const record: StaffSessionRecord = {
+        id: `session-${sequence}`,
+        tokenHash: input.tokenHash,
+        staffId: input.staffId,
+        expiresAt: input.expiresAt,
+        createdAt: new Date(),
+      };
+
+      records.set(record.id, record);
+      return record;
+    },
+
+    async findActiveByTokenHash(tokenHash: string, now: Date): Promise<StaffSessionRecord | null> {
+      return (
+        [...records.values()].find(
+          (record) => record.tokenHash === tokenHash && record.expiresAt > now,
+        ) ?? null
+      );
+    },
+
+    async deleteByTokenHash(tokenHash: string): Promise<void> {
+      for (const [id, record] of records) {
+        if (record.tokenHash === tokenHash) {
+          records.delete(id);
+        }
+      }
+    },
+
+    async revokeAllForStaff(staffId: string): Promise<void> {
+      for (const [id, record] of records) {
+        if (record.staffId === staffId) {
+          records.delete(id);
+        }
+      }
     },
   };
 }

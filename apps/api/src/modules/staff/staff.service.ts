@@ -3,12 +3,10 @@ import { assertAdmin } from '../../shared/authorization.js';
 import { AppError } from '../../shared/errors.js';
 import { isDuplicateKeyError } from '../../shared/mongo-errors.js';
 import type { Paginated } from '../../shared/pagination.js';
-import { hashSecret } from '../../shared/password.js';
+import type { StaffSessionsRepository } from '../auth/auth-sessions.repository.js';
 import type { AuditRepository } from '../audit/audit.repository.js';
-import { auditRepository } from '../audit/audit.repository.js';
 import type { StaffRole } from './staff.roles.js';
 import type { StaffUserRecord, StaffRepository } from './staff.repository.js';
-import { staffRepository } from './staff.repository.js';
 import type { CreateStaffInput, StaffListQuery, UpdateStaffInput } from './staff.validator.js';
 
 const DUPLICATE_USERNAME_MESSAGE = 'Ya existe un usuario con ese nombre.';
@@ -27,6 +25,7 @@ export interface StaffServiceDeps {
   staff: StaffRepository;
   audit: AuditRepository;
   hashPassword: (password: string) => Promise<string>;
+  sessions: Pick<StaffSessionsRepository, 'revokeAllForStaff'>;
 }
 
 export function toStaffDto(record: StaffUserRecord): StaffDto {
@@ -118,6 +117,10 @@ export function createStaffService(deps: StaffServiceDeps) {
         throw new AppError(404, 'NOT_FOUND', 'El usuario no existe.');
       }
 
+      if (updated.active === false) {
+        await deps.sessions.revokeAllForStaff(updated.id);
+      }
+
       await deps.audit.record({
         actorType: 'staff',
         actorId: actor.id,
@@ -133,9 +136,3 @@ export function createStaffService(deps: StaffServiceDeps) {
 }
 
 export type StaffService = ReturnType<typeof createStaffService>;
-
-export const staffService: StaffService = createStaffService({
-  staff: staffRepository,
-  audit: auditRepository,
-  hashPassword: hashSecret,
-});

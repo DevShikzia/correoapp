@@ -1,5 +1,11 @@
 export type ErrorCode =
-  'VALIDATION_ERROR' | 'UNAUTHORIZED' | 'FORBIDDEN' | 'NOT_FOUND' | 'CONFLICT' | 'INTERNAL_ERROR';
+  | 'VALIDATION_ERROR'
+  | 'UNAUTHORIZED'
+  | 'FORBIDDEN'
+  | 'NOT_FOUND'
+  | 'CONFLICT'
+  | 'TOO_MANY_REQUESTS'
+  | 'INTERNAL_ERROR';
 
 export class AppError extends Error {
   readonly statusCode: number;

@@ -75,6 +75,12 @@ infra/        Compose (MongoDB) y, más adelante, Nginx y scripts
 docs/         alcance, plan, estándares, seguridad, API, despliegue y pruebas
 ```
 
-Estado actual: Fase 2 (modelos y reglas de negocio). La API expone `/api/health`; los servicios de lotes y vigiladores todavía no tienen endpoints HTTP porque se montan junto con la autenticación en la Fase 3.
+Estado actual: Fase 3 (login y permisos). La API expone `/api/health`, `/api/auth` (login, logout, sesión actual), `/api/lots` y `/api/staff`, estas dos últimas solo para administradores autenticados.
+
+Notas de operación:
+- Los endpoints de administración exigen la cookie de sesión `staff_session` (`HttpOnly`, `SameSite=Strict`, `Secure` en producción).
+- Con `APP_ORIGIN` definido, las peticiones `POST`/`PATCH`/`PUT`/`DELETE` deben enviar ese mismo `Origin` (protección CSRF).
+- El límite de intentos de login vive en memoria: es válido para una sola instancia de la API. En la Fase 6/7 se reemplaza por un almacenamiento compartido si se escala horizontalmente.
+- Ajustar `STAFF_SESSION_TTL_MINUTES` (por defecto 480) según la operación del barrio.
 
 

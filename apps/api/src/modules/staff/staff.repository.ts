@@ -31,6 +31,7 @@ export interface StaffRepository {
   findByUsername(username: string): Promise<StaffUserRecord | null>;
   list(page: number, limit: number): Promise<Paginated<StaffUserRecord>>;
   update(id: string, changes: UpdateStaffRecordInput): Promise<StaffUserRecord | null>;
+  touchLastLogin(id: string): Promise<void>;
   countActiveAdmins(excludingId?: string): Promise<number>;
 }
 
@@ -90,6 +91,13 @@ export const staffRepository: StaffRepository = {
       { new: true, runValidators: true },
     );
     return doc === null ? null : toRecord(doc);
+  },
+
+  async touchLastLogin(id: string): Promise<void> {
+    if (!isValidObjectId(id)) {
+      return;
+    }
+    await StaffUserModel.updateOne({ _id: id }, { $set: { lastLoginAt: new Date() } });
   },
 
   async countActiveAdmins(excludingId?: string): Promise<number> {

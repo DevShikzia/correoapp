@@ -3,7 +3,11 @@ import { createStaffService } from '../src/modules/staff/staff.service.js';
 import type { StaffUserRecord } from '../src/modules/staff/staff.repository.js';
 import type { Actor } from '../src/shared/actor.js';
 import { AppError } from '../src/shared/errors.js';
-import { createAuditRepositoryFake, createStaffRepositoryFake } from './fakes.js';
+import {
+  createAuditRepositoryFake,
+  createStaffRepositoryFake,
+  createStaffSessionsRepositoryFake,
+} from './fakes.js';
 
 const admin: Actor = { id: 'staff-0', role: 'admin' };
 const guard: Actor = { id: 'staff-9', role: 'guard' };
@@ -17,13 +21,15 @@ const NEW_GUARD = {
 function buildService(seed: StaffUserRecord[] = []) {
   const staff = createStaffRepositoryFake(seed);
   const audit = createAuditRepositoryFake();
+  const sessions = createStaffSessionsRepositoryFake();
   const service = createStaffService({
     staff,
     audit,
+    sessions,
     hashPassword: (password) => Promise.resolve(`hash:${password}`),
   });
 
-  return { service, staff, audit };
+  return { service, staff, audit, sessions };
 }
 
 async function expectAppError(promise: Promise<unknown>, code: string): Promise<void> {
@@ -109,6 +115,21 @@ describe('staffService.update', () => {
       action: 'staff.updated',
       entityId: created.id,
     });
+  });
+
+  it('revoca las sesiones activas al desactivar un usuario', async () => {
+    const { service, sessions } = buildService([otherAdmin]);
+    const created = await service.create(admin, NEW_GUARD);
+
+    await sessions.create({
+      tokenHash: `sha256:${created.id}`,
+      staffId: created.id,
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+
+    await service.update(admin, created.id, { active: false });
+
+    expect(sessions.records.size).toBe(0);
   });
 
   it('permite degradar un administrador si queda otro activo', async () => {

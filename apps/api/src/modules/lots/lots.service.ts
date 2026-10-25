@@ -3,13 +3,10 @@ import { assertAdmin } from '../../shared/authorization.js';
 import { AppError } from '../../shared/errors.js';
 import { isDuplicateKeyError } from '../../shared/mongo-errors.js';
 import type { Paginated } from '../../shared/pagination.js';
-import { hashSecret } from '../../shared/password.js';
 import type { AuditRepository } from '../audit/audit.repository.js';
-import { auditRepository } from '../audit/audit.repository.js';
 import type { LotContact } from './lot.model.js';
 import type { CreateLotInput, LotListQuery, UpdateLotInput } from './lots.validator.js';
 import type { LotRecord, LotRepository } from './lots.repository.js';
-import { lotRepository } from './lots.repository.js';
 
 const DUPLICATE_LOT_MESSAGE = 'Ya existe un lote con ese número.';
 
@@ -150,9 +147,3 @@ export function createLotsService(deps: LotsServiceDeps) {
 }
 
 export type LotsService = ReturnType<typeof createLotsService>;
-
-export const lotsService: LotsService = createLotsService({
-  lots: lotRepository,
-  audit: auditRepository,
-  hashPin: hashSecret,
-});
