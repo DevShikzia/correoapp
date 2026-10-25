@@ -1,0 +1,28 @@
+import type { NextFunction, Request, Response } from 'express';
+import { logger } from '../config/logger.js';
+import { AppError } from '../shared/errors.js';
+
+export function notFoundHandler(_req: Request, res: Response): void {
+  res.status(404).json({
+    error: { code: 'NOT_FOUND', message: 'Recurso no encontrado.' },
+  });
+}
+
+export function errorHandler(
+  error: unknown,
+  req: Request,
+  res: Response,
+  _next: NextFunction,
+): void {
+  if (error instanceof AppError) {
+    res.status(error.statusCode).json({
+      error: { code: error.code, message: error.message },
+    });
+    return;
+  }
+
+  logger.error({ err: error, method: req.method, path: req.path }, 'error no controlado');
+  res.status(500).json({
+    error: { code: 'INTERNAL_ERROR', message: 'Ocurrió un error inesperado.' },
+  });
+}

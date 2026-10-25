@@ -1,0 +1,43 @@
+services:
+  mongo:
+    image: mongo:8.0
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:?falta MONGO_ROOT_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?falta MONGO_ROOT_PASSWORD}
+      MONGO_INITDB_DATABASE: ${MONGO_DATABASE:-correspondencia}
+    # Sin `ports:`: la base solo es alcanzable desde la red interna de Compose.
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - backend
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'mongosh',
+          '--quiet',
+          '--username',
+          '${MONGO_ROOT_USER}',
+          '--password',
+          '${MONGO_ROOT_PASSWORD}',
+          '--authenticationDatabase',
+          'admin',
+          '--eval',
+          'db.adminCommand({ ping: 1 })',
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+volumes:
+  mongo-data:
+
+networks:
+  backend:
+    driver: bridge

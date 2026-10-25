@@ -14,7 +14,10 @@
     "format:check": "prettier --check .",
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "pnpm -r --if-present test",
-    "build": "pnpm -r --if-present build"
+    "build": "pnpm -r --if-present build",
+    "dev:api": "pnpm --filter @correspondencia/api dev",
+    "dev:web": "pnpm --filter @correspondencia/web start",
+    "dev:worker": "pnpm --filter @correspondencia/worker dev"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

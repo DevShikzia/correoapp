@@ -35,7 +35,7 @@ La autorización se valida en el backend en cada petición. Ocultar datos en Ang
 Requisitos:
 - Node.js 22 LTS (ver `.nvmrc`).
 - pnpm fijado por Corepack; la versión exacta está en `packageManager` de `package.json`.
-- Docker para MongoDB y Redis a partir de la Fase 1 (todavía no es necesario).
+- Docker (Compose v2) para MongoDB.
 
 ```bash
 corepack enable pnpm      # Linux/macOS
@@ -47,7 +47,26 @@ pnpm build                # build
 pnpm format               # Prettier
 ```
 
+Servicios de desarrollo:
+
+```bash
+docker compose -f infra/compose/docker-compose.yml -f infra/compose/docker-compose.dev.yml up -d mongo
+pnpm dev:api              # API en http://localhost:3000
+pnpm dev:web              # Angular en http://localhost:4200
+pnpm dev:worker           # worker (sin colas hasta la Fase 6)
+```
+
 Crear `.env` copiando `.env.example` y completar valores locales. `.env` nunca se versiona.
 
-Estado actual: Fase 0 (base del repositorio). Todavía no hay código de aplicación; se agrega en la Fase 1.
+## Estructura
+```text
+apps/api/     Express + TypeScript; configuración validada, logger con redacción y /api/health
+apps/web/     Angular 21 (standalone, zoneless); rutas /portal, /staff y /admin
+apps/worker/  proceso TypeScript; procesará notificaciones en la Fase 6
+infra/        Compose (MongoDB) y, más adelante, Nginx y scripts
+docs/         alcance, plan, estándares, seguridad, API, despliegue y pruebas
+```
+
+Estado actual: Fase 1 (esqueleto). La API expone `/api/health`; las pantallas son marcadores de posición sin lógica de negocio.
+
 

@@ -1,0 +1,6 @@
+# Solo desarrollo: publica MongoDB en loopback para correr la API fuera de Docker.
+# Nunca usar este archivo en producción.
+services:
+  mongo:
+    ports:
+      - '127.0.0.1:27017:27017'

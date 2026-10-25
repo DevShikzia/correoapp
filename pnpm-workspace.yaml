@@ -1,2 +1,9 @@
 packages:
   - apps/*
+
+# Dependencias con scripts de instalación necesarios para el build local.
+onlyBuiltDependencies:
+  - '@parcel/watcher'
+  - esbuild
+  - lmdb
+  - msgpackr-extract
