@@ -1,7 +1,8 @@
 # 8. Estado actual y continuación
 
-Registro de estado al **25/10/2026**, con el repositorio en el commit `b93e648`
-(`feat(web): add owner portal and offline-safe PWA`).
+Registro de estado al **25/10/2026**. El código de la aplicación corresponde al commit
+`b93e648` (`feat(web): add owner portal and offline-safe PWA`); este documento y el
+script de humo se agregaron después, sin cambios funcionales.
 
 Este documento resume lo hecho, lo verificado, lo que falta y los pasos exactos para
 retomar después de reiniciar Windows. No contiene contraseñas ni secretos: los valores
