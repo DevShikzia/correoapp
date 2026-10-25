@@ -1,0 +1,161 @@
+:host {
+  display: block;
+  max-width: 42rem;
+  margin: 0 auto;
+}
+
+.panel {
+  background: #ffffff;
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+  box-shadow: 0 1px 3px rgb(15 23 42 / 12%);
+}
+
+h1 {
+  margin-bottom: 0.25rem;
+}
+
+.muted {
+  color: #52606d;
+  margin: 0.25rem 0 1rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+}
+
+label {
+  font-weight: 600;
+}
+
+input {
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #9aa5b1;
+  border-radius: 0.4rem;
+  font: inherit;
+  background: #ffffff;
+}
+
+input:focus {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+  border-color: #2563eb;
+}
+
+.field-error {
+  color: #b91c1c;
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.alert {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+  padding: 0.65rem 0.75rem;
+  border-radius: 0.4rem;
+}
+
+button {
+  padding: 0.65rem 1rem;
+  border: 1px solid #1d4ed8;
+  border-radius: 0.4rem;
+  background: #1d4ed8;
+  color: #ffffff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button.secondary {
+  background: #ffffff;
+  color: #1f2933;
+  border-color: #9aa5b1;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.privacy-note {
+  font-size: 0.85rem;
+  color: #52606d;
+  margin-top: 1rem;
+}
+
+.mail-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.mail-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.mail-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  border: 1px solid #e4e7eb;
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+}
+
+.mail-description {
+  font-weight: 600;
+  margin: 0 0 0.25rem;
+  overflow-wrap: anywhere;
+}
+
+.mail-date {
+  color: #52606d;
+  font-size: 0.85rem;
+  margin: 0.15rem 0;
+}
+
+.status {
+  align-self: flex-start;
+  background: #fef3c7;
+  color: #92400e;
+  border-radius: 999px;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.status.delivered {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.empty {
+  color: #52606d;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 480px) {
+  .mail-item {
+    flex-direction: column;
+  }
+}

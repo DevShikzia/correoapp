@@ -1,0 +1,118 @@
+@if (state() === 'checking') {
+  <section class="panel">
+    <p class="muted" aria-live="polite">Verificando sesión…</p>
+  </section>
+} @else if (state() === 'access') {
+  <section class="panel">
+    <h1>Consultá tu correspondencia</h1>
+    <p class="muted">Ingresá con el número de lote y el PIN de tu familia.</p>
+
+    @if (errorMessage()) {
+      <p class="alert" role="alert">{{ errorMessage() }}</p>
+    }
+
+    <form [formGroup]="form" (ngSubmit)="submitAccess()" novalidate>
+      <div class="field">
+        <label for="lotNumber">Número de lote</label>
+        <input
+          id="lotNumber"
+          type="text"
+          formControlName="lotNumber"
+          inputmode="numeric"
+          autocomplete="off"
+          maxlength="6"
+        />
+        @if (form.controls.lotNumber.touched && form.controls.lotNumber.invalid) {
+          <p class="field-error">Ingresá un número de lote de hasta 6 dígitos.</p>
+        }
+      </div>
+
+      <div class="field">
+        <label for="pin">PIN</label>
+        <input
+          id="pin"
+          type="password"
+          formControlName="pin"
+          inputmode="numeric"
+          autocomplete="off"
+          maxlength="8"
+        />
+        @if (form.controls.pin.touched && form.controls.pin.invalid) {
+          <p class="field-error">El PIN tiene entre 4 y 8 dígitos.</p>
+        }
+      </div>
+
+      <button type="submit" [disabled]="loading()">
+        {{ loading() ? 'Ingresando…' : 'Ingresar' }}
+      </button>
+    </form>
+
+    <p class="privacy-note">Solo vas a ver la correspondencia de tu lote.</p>
+  </section>
+} @else {
+  <section class="panel">
+    <header class="mail-header">
+      <div>
+        <h1>Correspondencia</h1>
+        <p class="muted">
+          Lote <strong>{{ lotNumber() }}</strong>
+        </p>
+      </div>
+      <button type="button" class="secondary" (click)="logout()" [disabled]="loading()">
+        Salir
+      </button>
+    </header>
+
+    @if (errorMessage()) {
+      <p class="alert" role="alert">{{ errorMessage() }}</p>
+    }
+    @if (loading()) {
+      <p class="muted" aria-live="polite">Cargando correspondencia…</p>
+    } @else if (items().length > 0) {
+      <ul class="mail-list">
+        @for (item of items(); track item.id) {
+          <li class="mail-item">
+            <div>
+              <p class="mail-description">{{ item.description || 'Sin descripción' }}</p>
+              <p class="mail-date">
+                Recibida el
+                <time [attr.datetime]="item.receivedAt">{{ formatDate(item.receivedAt) }}</time>
+              </p>
+              @if (item.deliveredAt) {
+                <p class="mail-date">
+                  Entregada el
+                  <time [attr.datetime]="item.deliveredAt">{{ formatDate(item.deliveredAt) }}</time>
+                </p>
+              }
+            </div>
+            <span class="status" [class.delivered]="item.status === 'delivered'">
+              {{ statusLabel(item) }}
+            </span>
+          </li>
+        }
+      </ul>
+
+      <nav class="pagination" aria-label="Paginación">
+        <button
+          type="button"
+          class="secondary"
+          [disabled]="loading() || page() === 1"
+          (click)="goToPage(page() - 1)"
+        >
+          Anterior
+        </button>
+        <span>Página {{ page() }} de {{ totalPages() }}</span>
+        <button
+          type="button"
+          class="secondary"
+          [disabled]="loading() || !hasNextPage()"
+          (click)="goToPage(page() + 1)"
+        >
+          Siguiente
+        </button>
+      </nav>
+    } @else if (!errorMessage()) {
+      <p class="empty">No tenés correspondencia registrada.</p>
+    }
+  </section>
+}
