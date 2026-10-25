@@ -18,7 +18,9 @@ locales viven en `.env`, que está ignorado por Git.
 - Pantallas `/staff` y `/admin`: todavía son marcadores de posición.
 - Tests al cierre de la Fase 5: **135 API + 9 web**, con lint, typecheck, build y
   formato en verde.
-- Último pipeline completo ejecutado sobre `b93e648`.
+- **Docker Compose validado**: MongoDB `mongo:8.0` en `127.0.0.1:27018`, smoke
+  HTTP 64/64 y datos persistentes tras reiniciar el contenedor.
+- Último pipeline completo ejecutado sobre `2946752`.
 
 ## Verificación real realizada
 
@@ -45,6 +47,22 @@ Resultado: **64/64 verificaciones OK**.
 
 La base `correspondencia_smoke` se eliminó al terminar. La API y el servidor Angular
 se detuvieron; los puertos `3000` y `4200` quedaron libres.
+
+### Misma prueba contra Docker Compose
+
+El **25/10/2026** se repitió el smoke completo contra el MongoDB de Compose
+(`mongo:8.0`, contenedor `compose-mongo-1`) publicado en `127.0.0.1:27018`, para no
+chocar con el MongoDB nativo que seguía en `27017`. Resultado: **64/64 OK**.
+
+Además se verificó:
+
+- Contenedor en estado `healthy` con autenticación root de Compose (`{"ok":1}`).
+- Persistencia real tras `docker restart compose-mongo-1`: seguían los 3 lotes,
+  2 registros de correspondencia (1 entregado) y 2 usuarios de staff.
+- `docker compose down` conservó el volumen `compose_mongo-data`.
+- El MongoDB nativo y sus otras bases (`panelLSO`, `tramiTickets`, etc.) no se
+  detuvieron ni se modificaron.
+- La base descartable se eliminó antes de bajar Compose.
 
 ### Reproducir la prueba
 
@@ -80,112 +98,71 @@ Variables opcionales del script: `SMOKE_BASE_URL` (por defecto
 `http://localhost:4200`, debe coincidir con `APP_ORIGIN`) y
 `SMOKE_GUARD_PASSWORD` (si se omite, se genera una aleatoria).
 
-## Infraestructura local instalada
+## Entorno local
 
-- **Docker Desktop 4.96.3** instalado con winget. Cliente `docker` 29.9.2 y
-  Compose v5.6.1.
-- **WSL2** instalado y kernel actualizado. Componentes
-  `VirtualMachinePlatform`, `Microsoft-Windows-Subsystem-Linux` y
-  `Microsoft-Hyper-V-All` habilitados.
-- Docker Desktop configurado para iniciarse al iniciar sesión.
-- **MongoDB 8.0 nativo** ya existía como servicio de Windows en
-  `127.0.0.1:27017`, sin autenticación (`mongod.cfg` sin bloque `security`).
-  Sus datos están en `C:\Program Files\MongoDB\Server\8.0\data`.
-- `.env` local (ignorado por Git) apunta ahora al MongoDB nativo y deja comentada
-  la línea para el MongoDB de Compose.
+- **Docker Desktop 4.96.3** con cliente `docker` 29.9.2, motor Linux y Compose
+  v5.6.1. Arranca al iniciar sesión.
+- **WSL2** versión 2 con kernel 6.18; hipervisor activo.
+- **MongoDB 8.0 nativo** como servicio de Windows en `127.0.0.1:27017`, sin
+  autenticación (`mongod.cfg` sin bloque `security`). Sus datos están en
+  `C:\Program Files\MongoDB\Server\8.0\data`.
+- **MongoDB de Compose** (`mongo:8.0`) se publica en `127.0.0.1:${MONGO_HOST_PORT}`
+  mediante `infra/compose/docker-compose.dev.yml`. Para convivir con el nativo,
+  el `.env` local usa `MONGO_HOST_PORT=27018`.
+- El `.env` local apunta por defecto al MongoDB nativo para el desarrollo diario.
+  La prueba contra Compose se hace con un override de `MONGODB_URI` en la shell.
+- Los comandos de Compose deben usar `--env-file .env` de forma explícita para que
+  el puerto y las credenciales se resuelvan sin ambigüedad.
 
-## Bloqueo actual: reinicio pendiente
-
-La habilitación de los componentes devolvió `3010` (reinicio requerido) y `wsl --status`
-todavía informa que la virtualización no está activa. Por eso Docker Desktop no puede
-iniciar su motor y `docker version` devuelve error 500 en el contexto `desktop-linux`.
-
-**No hay nada más que instalar.** Falta reiniciar Windows una vez.
-
-## Pasos para continuar después del reinicio
-
-### 1. Verificar Docker y WSL
-
-```powershell
-wsl --status        # debe informar versión predeterminada 2
-docker version      # debe mostrar cliente y servidor, sin error 500
-docker ps           # debe responder sin error
-```
-
-Si Docker Desktop no arrancó solo, abrirlo desde el menú Inicio y esperar a que el
-motor esté listo.
-
-### 2. Elegir qué MongoDB usar
-
-El MongoDB nativo y el de Compose **no pueden escuchar ambos en `27017`**. Elegir una opción:
-
-- **Compose (recomendado para validar Docker):** detener el servicio nativo desde una
-  PowerShell de administrador:
-
-  ```powershell
-  Stop-Service MongoDB
-  ```
-
-  Opcionalmente, dejarlo manual para que no vuelva a tomar el puerto:
-
-  ```powershell
-  Set-Service MongoDB -StartupType Manual
-  ```
-
-- **MongoDB nativo:** no levantar el servicio `mongo` de Compose. Es lo que se usó en
-  la verificación del 25/10.
-
-### 3. Levantar MongoDB con Compose
+## Cómo levantar el MongoDB de Compose
 
 Desde la raíz del repositorio:
 
 ```powershell
-docker compose -f infra/compose/docker-compose.yml -f infra/compose/docker-compose.dev.yml up -d mongo
-docker compose -f infra/compose/docker-compose.yml -f infra/compose/docker-compose.dev.yml ps
+docker compose --env-file .env `
+  -f infra/compose/docker-compose.yml `
+  -f infra/compose/docker-compose.dev.yml up -d mongo
+
+docker compose --env-file .env `
+  -f infra/compose/docker-compose.yml `
+  -f infra/compose/docker-compose.dev.yml ps
 ```
 
-El contenedor debe quedar `healthy`. El archivo de desarrollo publica MongoDB solo en
-`127.0.0.1:27017`; no se expone a Internet.
-
-### 4. Apuntar `.env` al MongoDB de Compose
-
-Descomentar en `.env` la línea:
-
-```dotenv
-MONGODB_URI=mongodb://correspondencia_admin:<password-local>@127.0.0.1:27017/correspondencia?authSource=admin
-```
-
-El usuario y la contraseña son los de `MONGO_ROOT_USER`/`MONGO_ROOT_PASSWORD` del
-mismo `.env`. No versionar ese archivo.
-
-### 5. Preparar la base y el administrador
+El contenedor debe quedar `healthy` y publicado solo en loopback. Para apuntar la
+API al Mongo de Compose, construir la URI con las credenciales del `.env` y el
+puerto `MONGO_HOST_PORT`:
 
 ```powershell
-pnpm --filter @correspondencia/api sync:indexes
-
-$env:ADMIN_USERNAME = 'elegir-usuario'
-$env:ADMIN_PASSWORD = 'elegir-contraseña-de-12-o-más'
-pnpm --filter @correspondencia/api bootstrap:admin
+$mongoUser = ((Get-Content .env | Where-Object { $_ -match '^MONGO_ROOT_USER=' }) -split '=',2)[1]
+$mongoPassword = ((Get-Content .env | Where-Object { $_ -match '^MONGO_ROOT_PASSWORD=' }) -split '=',2)[1]
+$env:MONGODB_URI = "mongodb://${mongoUser}:${mongoPassword}@127.0.0.1:27018/correspondencia?authSource=admin"
+pnpm dev:api
 ```
 
-El bootstrap falla si el usuario ya existe. Usar credenciales propias, no las de
-ejemplo de este documento.
-
-### 6. Levantar API y portal
+Para bajar el contenedor conservando los datos:
 
 ```powershell
-pnpm dev:api    # http://localhost:3000
-pnpm dev:web    # http://localhost:4200, proxy /api → :3000
+docker compose --env-file .env `
+  -f infra/compose/docker-compose.yml `
+  -f infra/compose/docker-compose.dev.yml down
 ```
 
-Probar `/portal` en el navegador y, si se desea, correr el smoke contra una base
-descartable como se explicó arriba.
+El volumen `compose_mongo-data` permanece. No usar `down -v` salvo que se quieran
+borrar los datos de Compose a propósito.
 
-### 7. Cerrar la validación de Docker
+## Cierre de la Fase 5
 
-- Confirmar que el contenedor de Mongo sobrevive a un reinicio de Docker Desktop.
-- Confirmar que la API se conecta a Compose y que `pnpm smoke:http` sigue en verde.
-- Recién entonces pasar a la Fase 6.
+La validación pendiente de Docker quedó completa:
+
+- `docker version` y `docker ps` responden correctamente tras el reinicio.
+- WSL2 informa versión 2 y el motor Linux de Docker funciona.
+- El contenedor de MongoDB de Compose quedó `healthy` en `127.0.0.1:27018`.
+- `pnpm smoke:http` pasó **64/64** contra esa instancia.
+- Los datos sobrevivieron al reinicio del contenedor y el volumen quedó conservado.
+- El MongoDB nativo y las demás bases no se vieron afectados.
+
+La Fase 5 queda cerrada. El siguiente trabajo es la Fase 6 (notificaciones por
+WhatsApp de forma asíncrona).
 
 ## Decisiones y comportamientos a tener presentes
 
@@ -206,10 +183,10 @@ descartable como se explicó arriba.
 
 ## Riesgos y deuda pendiente
 
-- **Docker todavía no fue ejercitado**: falta el reinicio y la prueba de Compose.
 - El rate limit en memoria se reinicia con la API y una IP compartida (por ejemplo,
   una red doméstica con NAT) puede bloquear a varios propietarios durante 15 minutos.
-- MongoDB nativo y Compose compiten por el puerto `27017`; hay que elegir uno.
+- El MongoDB de Compose y el nativo conviven solo porque usan puertos distintos
+  (`27018` y `27017`). Si se cambia `MONGO_HOST_PORT`, revisar el `.env` y la URI.
 - Las pantallas `/staff` y `/admin` no tienen interfaz real todavía.
 - Los iconos PWA son los genéricos que genera Angular.
 - Fase 6 (WhatsApp asíncrono), backups, restauración, HTTPS y endurecimiento de
@@ -218,25 +195,24 @@ descartable como se explicó arriba.
 
 ## Próximos pasos sugeridos
 
-1. Reiniciar Windows y completar la validación de Docker/Compose (secciones anteriores).
-2. Cerrar la Fase 5 con la prueba sobre Compose y actualizar este documento.
-3. Fase 6: interfaz `NotificationProvider`, cola BullMQ, worker con reintentos e
+1. Fase 6: interfaz `NotificationProvider`, cola BullMQ, worker con reintentos e
    idempotencia y webhook autenticado.
-4. Implementar las pantallas de staff y administración.
-5. Fase 7: endurecimiento, rate limit compartido, backups y restauración.
-6. Fase 8: despliegue en Ubuntu Server con Nginx, Cloudflare Tunnel y HTTPS.
+2. Implementar las pantallas de staff y administración.
+3. Fase 7: endurecimiento, rate limit compartido, backups y restauración.
+4. Fase 8: despliegue en Ubuntu Server con Nginx, Cloudflare Tunnel y HTTPS.
 
 ## Checklist para retomar
 
-- [ ] Reiniciar Windows.
-- [ ] `wsl --status` informa versión 2.
-- [ ] `docker version` y `docker ps` funcionan sin error 500.
-- [ ] Elegir MongoDB nativo o Compose y liberar `27017`.
-- [ ] Contenedor `mongo` de Compose `healthy`.
-- [ ] `.env` apunta a la base elegida.
-- [ ] `sync:indexes` ejecutado.
-- [ ] Administrador definitivo creado con credenciales propias.
-- [ ] API y portal arrancan.
-- [ ] `pnpm smoke:http` en verde contra base descartable.
-- [ ] Base descartable eliminada.
-- [ ] Continuar con la Fase 6.
+- [x] Reiniciar Windows.
+- [x] `wsl --status` informa versión 2.
+- [x] `docker version` y `docker ps` funcionan sin error.
+- [x] MongoDB de Compose en `127.0.0.1:27018` con `MONGO_HOST_PORT`.
+- [x] Contenedor `mongo` de Compose `healthy`.
+- [x] Autenticación root de Compose verificada.
+- [x] `sync:indexes` ejecutado contra Compose.
+- [x] `pnpm smoke:http` en verde contra base descartable (64/64).
+- [x] Datos persistentes tras reiniciar el contenedor.
+- [x] Base descartable eliminada.
+- [x] Volumen `compose_mongo-data` conservado.
+- [x] MongoDB nativo y sus otras bases intactos.
+- [ ] Fase 6.

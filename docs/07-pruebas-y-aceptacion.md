@@ -7,21 +7,26 @@
 - Lint, typecheck y build en CI antes de integrar cambios.
 
 ## Casos críticos
-- [ ] Login correcto e incorrecto de vigilador.
-- [ ] Vigilador desactivado no puede seguir usando sesión.
-- [ ] Solo admin puede crear lotes y usuarios.
-- [ ] PIN incorrecto no revela si el lote existe.
-- [ ] Demasiados intentos bloquean o ralentizan nuevos intentos.
-- [ ] Cambiar PIN invalida sesiones previas del lote.
-- [ ] Lote A no puede consultar correspondencia de lote B aunque cambie IDs/query params.
-- [ ] API nunca devuelve teléfonos ni PIN hash a propietarios.
-- [ ] Vigilador solo puede marcar entrega con transición válida.
-- [ ] Doble solicitud de entrega no genera registros contradictorios.
+
+Estado al **25/10/2026**: los casos marcados se verificaron con tests automatizados y/o
+el smoke HTTP (`pnpm smoke:http`), tanto contra MongoDB nativo como contra el MongoDB
+de Compose.
+
+- [x] Login correcto e incorrecto de vigilador.
+- [x] Vigilador desactivado no puede seguir usando sesión.
+- [x] Solo admin puede crear lotes y usuarios.
+- [x] PIN incorrecto no revela si el lote existe.
+- [x] Demasiados intentos bloquean o ralentizan nuevos intentos.
+- [x] Cambiar PIN invalida sesiones previas del lote.
+- [x] Lote A no puede consultar correspondencia de lote B aunque cambie IDs/query params.
+- [x] API nunca devuelve teléfonos ni PIN hash a propietarios.
+- [x] Vigilador solo puede marcar entrega con transición válida.
+- [x] Doble solicitud de entrega no genera registros contradictorios.
 - [ ] Una falla del proveedor WhatsApp no borra la correspondencia.
 - [ ] Reintentos y webhooks duplicados no duplican estados ni acciones.
-- [ ] Respuestas privadas no se guardan en caché PWA.
+- [x] Respuestas privadas no se guardan en caché PWA.
 - [ ] Logs no contienen secretos ni datos sensibles.
-- [ ] MongoDB y Redis no están publicados en Internet.
+- [x] MongoDB no está publicado en Internet (solo loopback en desarrollo y red interna en producción). Redis se valida en la Fase 6.
 - [ ] Backup se restaura con éxito en entorno aislado.
 - [ ] Reinicio de servicios recupera colas y datos persistidos.
 - [ ] Configuración de producción usa HTTPS y cookies seguras.

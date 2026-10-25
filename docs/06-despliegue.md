@@ -30,6 +30,26 @@ Ignorar `.env`, `.env.*` excepto `.env.example`, `node_modules/`, `dist/`, `.ang
 
 No copiar contraseñas reales en `docker-compose.yml`. Mantener Mongo/Redis fuera de `ports:`. Agregar healthchecks y `restart: unless-stopped`.
 
+### Compose en desarrollo
+
+`infra/compose/docker-compose.dev.yml` publica MongoDB solo en loopback para poder
+ejecutar la API fuera de Docker. El puerto local es configurable:
+
+```powershell
+docker compose --env-file .env `
+  -f infra/compose/docker-compose.yml `
+  -f infra/compose/docker-compose.dev.yml up -d mongo
+```
+
+- `MONGO_HOST_PORT` (por defecto `27017`) define el puerto del host. Si ya existe un
+  MongoDB nativo en `27017`, usar `27018` para convivir sin detenerlo.
+- Las credenciales salen de `MONGO_ROOT_USER` y `MONGO_ROOT_PASSWORD` del `.env`.
+- Usar `--env-file .env` explícito para evitar ambigüedad entre proyectos Compose.
+- `down` conserva el volumen `compose_mongo-data`; no usar `down -v` salvo que se
+  quieran borrar los datos a propósito.
+- En producción este archivo de desarrollo no se usa: MongoDB queda solo en la red
+  interna de Compose.
+
 ## Notebook de 4 GB RAM
 - Ubuntu Server sin entorno gráfico.
 - Empezar con límite conservador para MongoDB (aprox. 512 MB de caché WiredTiger; ajustar tras medir).

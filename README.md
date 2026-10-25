@@ -51,11 +51,17 @@ pnpm format               # Prettier
 Servicios de desarrollo:
 
 ```bash
-docker compose -f infra/compose/docker-compose.yml -f infra/compose/docker-compose.dev.yml up -d mongo
+docker compose --env-file .env -f infra/compose/docker-compose.yml -f infra/compose/docker-compose.dev.yml up -d mongo
 pnpm dev:api              # API en http://localhost:3000
 pnpm dev:web              # Angular en http://localhost:4200 (proxy /api → :3000)
 pnpm dev:worker           # worker (sin colas hasta la Fase 6)
 ```
+
+`MONGO_HOST_PORT` define el puerto local del MongoDB de Compose (por defecto `27017`).
+Si ya hay un MongoDB nativo en `27017`, usar `MONGO_HOST_PORT=27018` en `.env` y
+ajustar `MONGODB_URI` o sobreescribirla en la shell. Compose publica siempre en
+`127.0.0.1`, nunca en todas las interfaces. Para bajar el contenedor conservando los
+datos: `docker compose --env-file .env -f infra/compose/docker-compose.yml -f infra/compose/docker-compose.dev.yml down`.
 
 El servidor de desarrollo de Angular usa `apps/web/proxy.conf.json` para enviar `/api` a la API. Así el navegador trabaja siempre contra el mismo origen y las cookies `SameSite=Strict` funcionan igual que en producción con Nginx. No hace falta configurar CORS.
 
