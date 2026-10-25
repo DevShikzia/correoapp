@@ -1,0 +1,179 @@
+@if (successMessage()) {
+  <p class="success" role="status" aria-live="polite">{{ successMessage() }}</p>
+}
+@if (actionError()) {
+  <p class="alert" role="alert">{{ actionError() }}</p>
+}
+
+<section class="panel" aria-labelledby="new-staff-title">
+  <h2 id="new-staff-title">Nuevo usuario</h2>
+
+  <form [formGroup]="form" (ngSubmit)="submitCreate()" novalidate>
+    <div class="grid">
+      <div class="field">
+        <label for="newStaffUsername">Usuario</label>
+        <input
+          id="newStaffUsername"
+          type="text"
+          formControlName="username"
+          autocomplete="off"
+          autocapitalize="none"
+          spellcheck="false"
+          maxlength="32"
+        />
+        @if (form.controls.username.touched && form.controls.username.invalid) {
+          <p class="field-error">
+            Entre 3 y 32 caracteres: letras, números, punto, guion o guion bajo. Debe empezar y
+            terminar con letra o número.
+          </p>
+        }
+      </div>
+
+      <div class="field">
+        <label for="newStaffPassword">Contraseña</label>
+        <input
+          id="newStaffPassword"
+          type="password"
+          formControlName="password"
+          autocomplete="new-password"
+          maxlength="128"
+        />
+        @if (form.controls.password.touched && form.controls.password.invalid) {
+          <p class="field-error">
+            La contraseña debe tener al menos {{ passwordMinLength }} caracteres.
+          </p>
+        }
+      </div>
+
+      <div class="field">
+        <label for="newStaffRole">Rol</label>
+        <select id="newStaffRole" formControlName="role">
+          <option value="guard">Vigilador</option>
+          <option value="admin">Administrador</option>
+        </select>
+      </div>
+    </div>
+
+    <button type="submit" [disabled]="creating()">
+      {{ creating() ? 'Creando…' : 'Crear usuario' }}
+    </button>
+  </form>
+</section>
+
+<section class="panel" aria-labelledby="staff-list-title">
+  <header class="section-header">
+    <h2 id="staff-list-title">Usuarios</h2>
+    <button type="button" class="secondary" [disabled]="loading()" (click)="goToPage(page())">
+      Actualizar
+    </button>
+  </header>
+
+  @if (listError()) {
+    <p class="alert" role="alert">{{ listError() }}</p>
+  }
+
+  @if (loading()) {
+    <p class="muted" aria-live="polite">Cargando usuarios…</p>
+  } @else if (users().length > 0) {
+    <ul class="list">
+      @for (user of users(); track user.id) {
+        <li class="list-item">
+          <div class="list-main">
+            <p class="list-title">
+              {{ user.username }}
+              <span class="status" [class.active]="user.active" [class.inactive]="!user.active">
+                {{ user.active ? 'Activo' : 'Inactivo' }}
+              </span>
+            </p>
+            <p class="list-meta">{{ roleLabel(user.role) }}</p>
+            <p class="list-meta">Último acceso: {{ formatDate(user.lastLoginAt) }}</p>
+          </div>
+
+          <div class="list-actions">
+            @if (isCurrentUser(user)) {
+              <p class="hint">Tu usuario no se puede modificar desde acá.</p>
+            } @else {
+              <div class="actions">
+                <select #roleSelect [value]="user.role" [disabled]="changingId() === user.id">
+                  <option value="guard">Vigilador</option>
+                  <option value="admin">Administrador</option>
+                </select>
+                <button
+                  type="button"
+                  class="secondary"
+                  [disabled]="changingId() === user.id"
+                  (click)="changeRole(user, roleSelect.value)"
+                >
+                  Aplicar rol
+                </button>
+              </div>
+
+              <div class="actions">
+                @if (pendingStatusUserId() === user.id) {
+                  <button
+                    type="button"
+                    class="danger"
+                    [disabled]="changingId() === user.id"
+                    (click)="confirmStatusChange(user)"
+                  >
+                    {{ changingId() === user.id ? 'Guardando…' : 'Confirmar' }}
+                  </button>
+                  <button
+                    type="button"
+                    class="secondary"
+                    [disabled]="changingId() !== null"
+                    (click)="cancelStatusChange()"
+                  >
+                    Cancelar
+                  </button>
+                } @else {
+                  <button
+                    type="button"
+                    [class.danger]="user.active"
+                    [class.secondary]="!user.active"
+                    [disabled]="changingId() !== null"
+                    (click)="requestStatusChange(user)"
+                  >
+                    {{ user.active ? 'Desactivar' : 'Activar' }}
+                  </button>
+                }
+              </div>
+
+              @if (pendingStatusUserId() === user.id) {
+                <p class="hint">
+                  {{
+                    user.active
+                      ? 'Desactivar el usuario cierra sus sesiones abiertas.'
+                      : 'El usuario podrá volver a iniciar sesión.'
+                  }}
+                </p>
+              }
+            }
+          </div>
+        </li>
+      }
+    </ul>
+
+    <nav class="pagination" aria-label="Paginación de usuarios">
+      <button
+        type="button"
+        class="secondary"
+        [disabled]="loading() || page() === 1"
+        (click)="goToPage(page() - 1)"
+      >
+        Anterior
+      </button>
+      <span>Página {{ page() }} de {{ totalPages() }}</span>
+      <button
+        type="button"
+        class="secondary"
+        [disabled]="loading() || !hasNextPage()"
+        (click)="goToPage(page() + 1)"
+      >
+        Siguiente
+      </button>
+    </nav>
+  } @else if (!listError()) {
+    <p class="empty">No hay usuarios registrados.</p>
+  }
+</section>

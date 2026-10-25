@@ -1,0 +1,72 @@
+@if (state() === 'checking') {
+  <section class="panel">
+    <p class="muted" aria-live="polite">Verificando sesión…</p>
+  </section>
+} @else if (state() === 'login') {
+  <section class="panel">
+    <h1>Administración</h1>
+    <p class="muted">Ingresá con un usuario administrador.</p>
+
+    @if (notice()) {
+      <p class="alert" role="alert">{{ notice() }}</p>
+    }
+
+    <app-staff-login (loggedIn)="onLoggedIn()" />
+  </section>
+} @else if (state() === 'forbidden') {
+  <section class="panel">
+    <h1>Administración</h1>
+    <p class="alert" role="alert">No tenés permisos para acceder a administración.</p>
+    <p class="muted">Tu usuario puede registrar y entregar correspondencia desde Vigilancia.</p>
+
+    <div class="actions">
+      <a class="button-link" routerLink="/staff">Ir a Vigilancia</a>
+      <button type="button" class="secondary" (click)="logout()">Salir</button>
+    </div>
+  </section>
+} @else {
+  <div class="stack">
+    <section class="panel">
+      <header class="page-header">
+        <div>
+          <h1>Administración</h1>
+          <p class="muted">
+            {{ user()?.username }}
+            <span aria-hidden="true">·</span>
+            Administrador
+          </p>
+        </div>
+        <button type="button" class="secondary" (click)="logout()">Salir</button>
+      </header>
+
+      <div class="tabs" role="tablist" aria-label="Secciones de administración">
+        <button
+          type="button"
+          class="tab"
+          role="tab"
+          [class.active]="activeTab() === 'lots'"
+          [attr.aria-selected]="activeTab() === 'lots'"
+          (click)="selectTab('lots')"
+        >
+          Lotes
+        </button>
+        <button
+          type="button"
+          class="tab"
+          role="tab"
+          [class.active]="activeTab() === 'staff'"
+          [attr.aria-selected]="activeTab() === 'staff'"
+          (click)="selectTab('staff')"
+        >
+          Vigiladores
+        </button>
+      </div>
+    </section>
+
+    @if (activeTab() === 'lots') {
+      <app-lots-panel (sessionExpired)="onSessionExpired()" />
+    } @else {
+      <app-staff-panel (sessionExpired)="onSessionExpired()" />
+    }
+  </div>
+}

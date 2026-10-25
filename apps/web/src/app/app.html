@@ -3,7 +3,9 @@
   <nav aria-label="Secciones">
     <a routerLink="/portal" routerLinkActive="active">Portal</a>
     <a routerLink="/staff" routerLinkActive="active">Vigilancia</a>
-    <a routerLink="/admin" routerLinkActive="active">Administración</a>
+    @if (showAdmin()) {
+      <a routerLink="/admin" routerLinkActive="active">Administración</a>
+    }
   </nav>
 </header>
 

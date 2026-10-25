@@ -1,5 +1,6 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { StaffSessionService } from './core/staff-session.service';
 
 @Component({
   selector: 'app-root',
@@ -8,4 +9,12 @@ import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
   templateUrl: './app.html',
   styleUrl: './app.css',
 })
-export class App {}
+export class App {
+  private readonly session = inject(StaffSessionService);
+
+  readonly showAdmin = computed(() => this.session.user()?.role !== 'guard');
+
+  constructor() {
+    void this.session.ensure();
+  }
+}

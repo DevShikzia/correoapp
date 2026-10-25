@@ -1,0 +1,332 @@
+@if (successMessage()) {
+  <p class="success" role="status" aria-live="polite">{{ successMessage() }}</p>
+}
+@if (actionError()) {
+  <p class="alert" role="alert">{{ actionError() }}</p>
+}
+
+<section class="panel" aria-labelledby="new-lot-title">
+  <h2 id="new-lot-title">Nuevo lote</h2>
+
+  <form [formGroup]="createForm" (ngSubmit)="submitCreate()" novalidate>
+    <div class="grid">
+      <div class="field">
+        <label for="newLotNumber">Número de lote</label>
+        <input
+          id="newLotNumber"
+          type="text"
+          formControlName="lotNumber"
+          inputmode="numeric"
+          autocomplete="off"
+          maxlength="6"
+        />
+        @if (createForm.controls.lotNumber.touched && createForm.controls.lotNumber.invalid) {
+          <p class="field-error">Ingresá un número de lote de hasta 6 dígitos.</p>
+        }
+      </div>
+
+      <div class="field">
+        <label for="newLotPin">PIN inicial</label>
+        <input
+          id="newLotPin"
+          type="password"
+          formControlName="pin"
+          inputmode="numeric"
+          autocomplete="new-password"
+          maxlength="8"
+        />
+        @if (createForm.controls.pin.touched && createForm.controls.pin.invalid) {
+          <p class="field-error">El PIN tiene entre 4 y 8 dígitos.</p>
+        }
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="newLotOwners">Propietarios</label>
+      <input
+        id="newLotOwners"
+        type="text"
+        formControlName="ownerNames"
+        autocomplete="off"
+        placeholder="Familia Pérez, Familia Gómez"
+      />
+      <p class="hint">Separados por coma. Hasta 10 nombres.</p>
+      @if (createForm.controls.ownerNames.touched && createForm.controls.ownerNames.invalid) {
+        <p class="field-error">
+          Ingresá entre 1 y 10 nombres separados por coma, de 2 a 120 caracteres cada uno.
+        </p>
+      }
+    </div>
+
+    <fieldset>
+      <legend>Contactos (opcional)</legend>
+      <div formArrayName="contacts">
+        @for (contact of contacts.controls; track contact; let i = $index) {
+          <div class="contact-row" [formGroupName]="i">
+            <div class="field">
+              <label [for]="'newContactName' + i">Nombre</label>
+              <input
+                [id]="'newContactName' + i"
+                type="text"
+                formControlName="name"
+                autocomplete="off"
+                maxlength="80"
+              />
+              @if (contact.controls.name.touched && contact.controls.name.invalid) {
+                <p class="field-error">Ingresá un nombre de 2 a 80 caracteres.</p>
+              }
+            </div>
+            <div class="field">
+              <label [for]="'newContactPhone' + i">Teléfono</label>
+              <input
+                [id]="'newContactPhone' + i"
+                type="tel"
+                formControlName="phone"
+                autocomplete="off"
+                placeholder="+5491122334455"
+              />
+              @if (contact.controls.phone.touched && contact.controls.phone.invalid) {
+                <p class="field-error">Usá código de país, por ejemplo +5491122334455.</p>
+              }
+            </div>
+            <button type="button" class="secondary" (click)="removeContact(i)">Quitar</button>
+          </div>
+        }
+      </div>
+
+      <button
+        type="button"
+        class="secondary"
+        [disabled]="contacts.length >= maxContacts"
+        (click)="addContact()"
+      >
+        Agregar contacto
+      </button>
+      <p class="hint">Hasta 5 contactos. El teléfono se usará en la Fase 6.</p>
+    </fieldset>
+
+    <button type="submit" [disabled]="creating()">
+      {{ creating() ? 'Creando…' : 'Crear lote' }}
+    </button>
+  </form>
+</section>
+
+@if (editingLot(); as lot) {
+  <section class="panel" aria-labelledby="edit-lot-title">
+    <h2 id="edit-lot-title">Editar lote {{ lot.lotNumber }}</h2>
+
+    <form [formGroup]="editForm" (ngSubmit)="saveEdit()" novalidate>
+      <div class="field">
+        <label for="editLotOwners">Propietarios</label>
+        <input id="editLotOwners" type="text" formControlName="ownerNames" autocomplete="off" />
+        <p class="hint">Separados por coma. Hasta 10 nombres.</p>
+        @if (editForm.controls.ownerNames.touched && editForm.controls.ownerNames.invalid) {
+          <p class="field-error">
+            Ingresá entre 1 y 10 nombres separados por coma, de 2 a 120 caracteres cada uno.
+          </p>
+        }
+      </div>
+
+      <fieldset>
+        <legend>Contactos</legend>
+        <div formArrayName="contacts">
+          @for (contact of editContacts.controls; track contact; let i = $index) {
+            <div class="contact-row" [formGroupName]="i">
+              <div class="field">
+                <label [for]="'editContactName' + i">Nombre</label>
+                <input
+                  [id]="'editContactName' + i"
+                  type="text"
+                  formControlName="name"
+                  autocomplete="off"
+                  maxlength="80"
+                />
+                @if (contact.controls.name.touched && contact.controls.name.invalid) {
+                  <p class="field-error">Ingresá un nombre de 2 a 80 caracteres.</p>
+                }
+              </div>
+              <div class="field">
+                <label [for]="'editContactPhone' + i">Teléfono</label>
+                <input
+                  [id]="'editContactPhone' + i"
+                  type="tel"
+                  formControlName="phone"
+                  autocomplete="off"
+                  placeholder="+5491122334455"
+                />
+                @if (contact.controls.phone.touched && contact.controls.phone.invalid) {
+                  <p class="field-error">Usá código de país, por ejemplo +5491122334455.</p>
+                }
+              </div>
+              <button type="button" class="secondary" (click)="removeEditContact(i)">Quitar</button>
+            </div>
+          }
+        </div>
+
+        <button
+          type="button"
+          class="secondary"
+          [disabled]="editContacts.length >= maxContacts"
+          (click)="addEditContact()"
+        >
+          Agregar contacto
+        </button>
+      </fieldset>
+
+      <div class="actions">
+        <button type="submit" [disabled]="savingEdit()">
+          {{ savingEdit() ? 'Guardando…' : 'Guardar cambios' }}
+        </button>
+        <button type="button" class="secondary" (click)="cancelEdit()">Cancelar</button>
+      </div>
+    </form>
+  </section>
+}
+
+@if (pinLot(); as lot) {
+  <section class="panel" aria-labelledby="pin-lot-title">
+    <h2 id="pin-lot-title">Cambiar PIN del lote {{ lot.lotNumber }}</h2>
+    <p class="hint">Al cambiar el PIN se cierran las sesiones de propietario de ese lote.</p>
+
+    <form [formGroup]="pinForm" (ngSubmit)="submitPin()" novalidate>
+      <div class="field">
+        <label for="resetLotPin">PIN nuevo</label>
+        <input
+          id="resetLotPin"
+          type="password"
+          formControlName="pin"
+          inputmode="numeric"
+          autocomplete="new-password"
+          maxlength="8"
+        />
+        @if (pinForm.controls.pin.touched && pinForm.controls.pin.invalid) {
+          <p class="field-error">El PIN tiene entre 4 y 8 dígitos.</p>
+        }
+      </div>
+
+      <div class="actions">
+        <button type="submit" [disabled]="savingPin()">
+          {{ savingPin() ? 'Actualizando…' : 'Actualizar PIN' }}
+        </button>
+        <button type="button" class="secondary" (click)="cancelPin()">Cancelar</button>
+      </div>
+    </form>
+  </section>
+}
+
+<section class="panel" aria-labelledby="lot-list-title">
+  <header class="section-header">
+    <h2 id="lot-list-title">Lotes</h2>
+    <button type="button" class="secondary" [disabled]="loading()" (click)="goToPage(page())">
+      Actualizar
+    </button>
+  </header>
+
+  <form class="toolbar" [formGroup]="searchForm" (ngSubmit)="submitSearch()" novalidate>
+    <div class="field">
+      <label for="lotSearch">Buscar por lote o propietario</label>
+      <input id="lotSearch" type="search" formControlName="search" maxlength="80" />
+    </div>
+    <button type="submit" [disabled]="loading()">Buscar</button>
+    <button type="button" class="secondary" [disabled]="loading()" (click)="clearSearch()">
+      Limpiar
+    </button>
+  </form>
+
+  @if (listError()) {
+    <p class="alert" role="alert">{{ listError() }}</p>
+  }
+
+  @if (loading()) {
+    <p class="muted" aria-live="polite">Cargando lotes…</p>
+  } @else if (lots().length > 0) {
+    <ul class="list">
+      @for (lot of lots(); track lot.id) {
+        <li class="list-item">
+          <div class="list-main">
+            <p class="list-title">
+              Lote {{ lot.lotNumber }}
+              <span class="status" [class.active]="lot.active" [class.inactive]="!lot.active">
+                {{ lot.active ? 'Activo' : 'Inactivo' }}
+              </span>
+            </p>
+            <p class="list-meta">{{ lot.ownerNames.join(', ') }}</p>
+            <p class="list-meta">
+              {{ lot.contacts.length }}
+              {{ lot.contacts.length === 1 ? 'contacto' : 'contactos' }}
+              <span aria-hidden="true">·</span>
+              Creado el {{ formatDate(lot.createdAt) }}
+            </p>
+          </div>
+
+          <div class="list-actions">
+            <div class="actions">
+              <button type="button" class="secondary" (click)="startEdit(lot)">Editar</button>
+              <button type="button" class="secondary" (click)="startPin(lot)">Cambiar PIN</button>
+
+              @if (pendingStatusLotId() === lot.id) {
+                <button
+                  type="button"
+                  class="danger"
+                  [disabled]="changingStatusId() === lot.id"
+                  (click)="confirmStatusChange(lot)"
+                >
+                  {{ changingStatusId() === lot.id ? 'Guardando…' : 'Confirmar' }}
+                </button>
+                <button
+                  type="button"
+                  class="secondary"
+                  [disabled]="changingStatusId() !== null"
+                  (click)="cancelStatusChange()"
+                >
+                  Cancelar
+                </button>
+              } @else {
+                <button
+                  type="button"
+                  [class.danger]="lot.active"
+                  [class.secondary]="!lot.active"
+                  (click)="requestStatusChange(lot)"
+                >
+                  {{ lot.active ? 'Desactivar' : 'Activar' }}
+                </button>
+              }
+            </div>
+
+            @if (pendingStatusLotId() === lot.id) {
+              <p class="hint">
+                {{
+                  lot.active
+                    ? 'Desactivar el lote cierra sus sesiones de propietario.'
+                    : 'El lote volverá a aceptar accesos con su PIN.'
+                }}
+              </p>
+            }
+          </div>
+        </li>
+      }
+    </ul>
+
+    <nav class="pagination" aria-label="Paginación de lotes">
+      <button
+        type="button"
+        class="secondary"
+        [disabled]="loading() || page() === 1"
+        (click)="goToPage(page() - 1)"
+      >
+        Anterior
+      </button>
+      <span>Página {{ page() }} de {{ totalPages() }}</span>
+      <button
+        type="button"
+        class="secondary"
+        [disabled]="loading() || !hasNextPage()"
+        (click)="goToPage(page() + 1)"
+      >
+        Siguiente
+      </button>
+    </nav>
+  } @else if (!listError()) {
+    <p class="empty">No hay lotes que coincidan con la búsqueda.</p>
+  }
+</section>
