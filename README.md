@@ -58,6 +58,14 @@ pnpm dev:worker           # worker (sin colas hasta la Fase 6)
 
 Crear `.env` copiando `.env.example` y completar valores locales. `.env` nunca se versiona.
 
+Primer administrador (una sola vez, con MongoDB en marcha):
+
+```bash
+ADMIN_USERNAME=admin ADMIN_PASSWORD='contraseña-de-al-menos-12' \
+  pnpm --filter @correspondencia/api bootstrap:admin
+pnpm --filter @correspondencia/api sync:indexes
+```
+
 ## Estructura
 ```text
 apps/api/     Express + TypeScript; configuración validada, logger con redacción y /api/health
@@ -67,6 +75,6 @@ infra/        Compose (MongoDB) y, más adelante, Nginx y scripts
 docs/         alcance, plan, estándares, seguridad, API, despliegue y pruebas
 ```
 
-Estado actual: Fase 1 (esqueleto). La API expone `/api/health`; las pantallas son marcadores de posición sin lógica de negocio.
+Estado actual: Fase 2 (modelos y reglas de negocio). La API expone `/api/health`; los servicios de lotes y vigiladores todavía no tienen endpoints HTTP porque se montan junto con la autenticación en la Fase 3.
 
 

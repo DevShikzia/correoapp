@@ -6,6 +6,7 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   LOG_LEVEL: z.enum(LOG_LEVELS).default('info'),
+  MONGODB_URI: z.string().min(1).optional(),
   SESSION_SECRET: z.string().min(32).optional(),
 });
 
@@ -19,8 +20,14 @@ function readEnv(): Env {
     throw new Error(`Configuración inválida:\n${details.join('\n')}`);
   }
 
-  if (result.data.NODE_ENV === 'production' && result.data.SESSION_SECRET === undefined) {
-    throw new Error('Configuración inválida: SESSION_SECRET es obligatorio en producción.');
+  if (result.data.NODE_ENV === 'production') {
+    for (const requiredVariable of ['MONGODB_URI', 'SESSION_SECRET'] as const) {
+      if (result.data[requiredVariable] === undefined) {
+        throw new Error(
+          `Configuración inválida: ${requiredVariable} es obligatorio en producción.`,
+        );
+      }
+    }
   }
 
   return result.data;

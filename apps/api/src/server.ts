@@ -2,22 +2,24 @@ import type { Server } from 'node:http';
 import { createApp } from './app.js';
 import { env } from './config/env.js';
 import { logger } from './config/logger.js';
+import { connectDatabase, disconnectDatabase } from './db/mongoose.js';
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 
-const server: Server = createApp().listen(env.PORT, () => {
-  logger.info({ port: env.PORT, environment: env.NODE_ENV }, 'API iniciada');
-});
-
-function shutdown(signal: string): void {
+function shutdown(server: Server, signal: string): void {
   logger.info({ signal }, 'apagando API');
 
   server.close((error) => {
-    if (error) {
-      logger.error({ err: error }, 'error al cerrar el servidor');
-      process.exit(1);
-    }
-    process.exit(0);
+    void (async (): Promise<void> => {
+      if (error) {
+        logger.error({ err: error }, 'error al cerrar el servidor');
+        process.exit(1);
+      }
+      await disconnectDatabase().catch((dbError: unknown) => {
+        logger.error({ err: dbError }, 'error al cerrar MongoDB');
+      });
+      process.exit(0);
+    })();
   });
 
   setTimeout(() => {
@@ -26,8 +28,20 @@ function shutdown(signal: string): void {
   }, SHUTDOWN_TIMEOUT_MS).unref();
 }
 
-for (const signal of ['SIGINT', 'SIGTERM'] as const) {
-  process.on(signal, () => shutdown(signal));
+async function main(): Promise<void> {
+  if (env.MONGODB_URI === undefined) {
+    logger.warn('MONGODB_URI no configurada: la API arranca sin base de datos');
+  } else {
+    await connectDatabase(env.MONGODB_URI);
+  }
+
+  const server: Server = createApp().listen(env.PORT, () => {
+    logger.info({ port: env.PORT, environment: env.NODE_ENV }, 'API iniciada');
+  });
+
+  for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+    process.on(signal, () => shutdown(server, signal));
+  }
 }
 
 process.on('unhandledRejection', (reason) => {
@@ -37,5 +51,10 @@ process.on('unhandledRejection', (reason) => {
 
 process.on('uncaughtException', (error) => {
   logger.error({ err: error }, 'excepción no capturada');
+  process.exit(1);
+});
+
+main().catch((error: unknown) => {
+  logger.error({ err: error }, 'no se pudo iniciar la API');
   process.exit(1);
 });
