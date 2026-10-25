@@ -1,0 +1,10 @@
+node_modules/
+dist/
+build/
+.angular/
+coverage/
+pnpm-lock.yaml
+
+# Documentación redactada a mano: no se reformatea automáticamente.
+*.md
+docs/
