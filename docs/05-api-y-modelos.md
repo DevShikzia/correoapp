@@ -38,9 +38,13 @@ La entrega es una transición `pending → delivered` con actualización condici
 Solo usuarios autorizados pueden usar endpoints internos. Validar transiciones de estado en el servicio.
 
 ## Auditoría y notificaciones
-- `GET /audit?page=&limit=&from=&to=`
-- `POST /notifications/:id/retry` — solo admin, con límites.
-- `POST /webhooks/whatsapp` — validar autenticidad, formato e idempotencia.
+- Las acciones relevantes se registran en `AuditLog` (`mail.created`, `mail.delivered`, etc.).
+- `GET/POST /webhooks/whatsapp` — `GET` responde el challenge de verificación de Meta; `POST` valida la firma `X-Hub-Signature-256`, el formato y la idempotencia de los estados.
+- `POST /notifications/:id/retry` — reenvío manual solo para admin; queda para la Fase 7.
+
+La API guarda la correspondencia, la audita y recién después crea avisos durables (`NotificationJob`) y los encola en BullMQ. Un fallo de Redis o del proveedor no revierte el alta. El worker es un proceso separado y usa un modelo espejo de `NotificationJob`.
+
+El aviso solo lleva el número de lote: no se envía la descripción, el PIN ni otros datos de la correspondencia. El webhook actualiza `status`, `providerStatus`, `providerMessageId` y `lastErrorCode` sin confiar en datos del cliente.
 
 ## Reglas de modelos
 - Fechas guardadas como `Date` UTC.
@@ -49,6 +53,7 @@ Solo usuarios autorizados pueden usar endpoints internos. Validar transiciones d
 - `MailItem` copia el número de lote al registrar para listar sin joins; el número de lote no se modifica después de crearlo.
 - Índice TTL en `PublicSession.expiresAt`.
 - `PublicSession` guarda solo el hash SHA-256 del token y tiene índice único por `tokenHash`; el token en claro solo viaja en la cookie.
+- `NotificationJob` tiene índice único `{ mailItemId, phone }` para no duplicar avisos y un índice por `status + createdAt`. No guarda la descripción de la correspondencia.
 - Índices de auditoría por `createdAt` y `lotId + createdAt`.
 - No confiar en IDs recibidos: validar formato y autorización.
 - Aplicar paginación y límites máximos.

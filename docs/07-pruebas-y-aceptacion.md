@@ -11,7 +11,8 @@
 
 Estado al **25/10/2026**: los casos marcados se verificaron con tests automatizados y/o
 el smoke HTTP (`pnpm smoke:http`), tanto contra MongoDB nativo como contra el MongoDB
-de Compose.
+de Compose. La Fase 6 agrega **11 tests del worker** y **4 tests web** nuevos (34 en
+total) sobre los 149 de la API.
 
 - [x] Login correcto e incorrecto de vigilador.
 - [x] Vigilador desactivado no puede seguir usando sesión.
@@ -23,11 +24,11 @@ de Compose.
 - [x] API nunca devuelve teléfonos ni PIN hash a propietarios.
 - [x] Vigilador solo puede marcar entrega con transición válida.
 - [x] Doble solicitud de entrega no genera registros contradictorios.
-- [ ] Una falla del proveedor WhatsApp no borra la correspondencia.
-- [ ] Reintentos y webhooks duplicados no duplican estados ni acciones.
+- [x] Una falla del proveedor WhatsApp no borra la correspondencia.
+- [x] Reintentos y webhooks duplicados no duplican estados ni acciones.
 - [x] Respuestas privadas no se guardan en caché PWA.
 - [ ] Logs no contienen secretos ni datos sensibles.
-- [x] MongoDB no está publicado en Internet (solo loopback en desarrollo y red interna en producción). Redis se valida en la Fase 6.
+- [x] MongoDB y Redis no están publicados en Internet (solo loopback en desarrollo y red interna en producción).
 - [ ] Backup se restaura con éxito en entorno aislado.
 - [ ] Reinicio de servicios recupera colas y datos persistidos.
 - [ ] Configuración de producción usa HTTPS y cookies seguras.

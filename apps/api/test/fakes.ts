@@ -18,6 +18,15 @@ import type {
   MailRepository,
 } from '../src/modules/mail/mail.repository.js';
 import type {
+  CreateNotificationJobInput,
+  NotificationJobRecord,
+  NotificationRepository,
+} from '../src/modules/notifications/notification.repository.js';
+import type {
+  MailNotificationInput,
+  MailNotifier,
+} from '../src/modules/notifications/notification.service.js';
+import type {
   CreatePublicSessionInput,
   PublicSessionRecord,
   PublicSessionsRepository,
@@ -439,6 +448,156 @@ export function createPublicSessionsRepositoryFake(
           records.delete(id);
         }
       }
+    },
+  };
+}
+
+export interface MailNotifierFake extends MailNotifier {
+  inputs: MailNotificationInput[];
+  failNextCall(): void;
+}
+
+export function createMailNotifierFake(): MailNotifierFake {
+  const inputs: MailNotificationInput[] = [];
+  let failNext = false;
+
+  return {
+    inputs,
+
+    failNextCall(): void {
+      failNext = true;
+    },
+
+    async notifyMail(input: MailNotificationInput): Promise<void> {
+      if (failNext) {
+        failNext = false;
+        throw new Error('fallo simulado de notificación');
+      }
+
+      inputs.push(input);
+    },
+  };
+}
+
+export interface NotificationRepositoryFake extends NotificationRepository {
+  records: Map<string, NotificationJobRecord>;
+}
+
+export function createNotificationRepositoryFake(
+  seed: NotificationJobRecord[] = [],
+): NotificationRepositoryFake {
+  const records = new Map(seed.map((record) => [record.id, record]));
+  let sequence = records.size;
+
+  function update(
+    id: string,
+    changes: Partial<NotificationJobRecord>,
+  ): NotificationJobRecord | null {
+    const current = records.get(id);
+
+    if (current === undefined) {
+      return null;
+    }
+
+    const updated: NotificationJobRecord = { ...current, ...changes, updatedAt: new Date() };
+    records.set(id, updated);
+    return updated;
+  }
+
+  return {
+    records,
+
+    async createMany(inputs: CreateNotificationJobInput[]): Promise<NotificationJobRecord[]> {
+      const created: NotificationJobRecord[] = [];
+
+      for (const input of inputs) {
+        const existing = [...records.values()].find(
+          (record) => record.mailItemId === input.mailItemId && record.phone === input.phone,
+        );
+
+        if (existing !== undefined) {
+          created.push(existing);
+          continue;
+        }
+
+        sequence += 1;
+        const now = new Date();
+        const record: NotificationJobRecord = {
+          id: `notification-${sequence}`,
+          mailItemId: input.mailItemId,
+          lotId: input.lotId,
+          lotNumber: input.lotNumber,
+          phone: input.phone,
+          status: 'pending',
+          attempts: 0,
+          providerMessageId: null,
+          providerStatus: null,
+          lastErrorCode: null,
+          sentAt: null,
+          createdAt: now,
+          updatedAt: now,
+        };
+
+        records.set(record.id, record);
+        created.push(record);
+      }
+
+      return created;
+    },
+
+    async findById(id: string): Promise<NotificationJobRecord | null> {
+      return records.get(id) ?? null;
+    },
+
+    async markQueued(id: string): Promise<void> {
+      update(id, { status: 'queued' });
+    },
+
+    async markSending(id: string, attempt: number): Promise<NotificationJobRecord | null> {
+      return update(id, { status: 'sending', attempts: attempt });
+    },
+
+    async markSent(id: string, providerMessageId: string, sentAt: Date): Promise<void> {
+      update(id, {
+        status: 'sent',
+        providerMessageId,
+        providerStatus: 'sent',
+        lastErrorCode: null,
+        sentAt,
+      });
+    },
+
+    async markRetry(id: string, errorCode: string): Promise<void> {
+      update(id, { status: 'queued', lastErrorCode: errorCode });
+    },
+
+    async markFailed(id: string, errorCode: string): Promise<void> {
+      update(id, { status: 'failed', lastErrorCode: errorCode });
+    },
+
+    async applyProviderStatus(
+      providerMessageId: string,
+      status: 'sent' | 'failed',
+      providerStatus: string,
+      errorCode: string | null,
+    ): Promise<number> {
+      let modified = 0;
+
+      for (const record of [...records.values()]) {
+        if (record.providerMessageId !== providerMessageId) {
+          continue;
+        }
+
+        update(record.id, {
+          status,
+          providerStatus,
+          lastErrorCode: errorCode,
+          ...(record.sentAt === null && status === 'sent' ? { sentAt: new Date() } : {}),
+        });
+        modified += 1;
+      }
+
+      return modified;
     },
   };
 }

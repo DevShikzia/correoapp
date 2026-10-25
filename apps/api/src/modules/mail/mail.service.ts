@@ -3,6 +3,7 @@ import { AppError } from '../../shared/errors.js';
 import type { Paginated, Pagination } from '../../shared/pagination.js';
 import type { AuditRepository } from '../audit/audit.repository.js';
 import type { LotRecord, LotRepository } from '../lots/lots.repository.js';
+import type { MailNotifier } from '../notifications/notification.service.js';
 import type { MailItemRecord, MailRepository } from './mail.repository.js';
 import type { CreateMailInput } from './mail.validator.js';
 import type { MailStatus } from './mail-item.model.js';
@@ -29,6 +30,7 @@ export interface MailServiceDeps {
   mail: MailRepository;
   lots: LotRepository;
   audit: AuditRepository;
+  notifier: MailNotifier;
   now: () => Date;
 }
 
@@ -104,6 +106,17 @@ export function createMailService(deps: MailServiceDeps) {
         lotId: created.lotId,
         requestId,
       });
+
+      try {
+        await deps.notifier.notifyMail({
+          mailItemId: created.id,
+          lotId: created.lotId,
+          lotNumber: created.lotNumber,
+          contacts: lot.contacts,
+        });
+      } catch {
+        // La correspondencia ya está guardada: un fallo de notificación no la revierte.
+      }
 
       return toMailItemDto(created);
     },

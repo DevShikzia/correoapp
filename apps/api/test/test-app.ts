@@ -8,6 +8,8 @@ import { createLotsService } from '../src/modules/lots/lots.service.js';
 import type { LotRecord } from '../src/modules/lots/lots.repository.js';
 import type { MailItemRecord } from '../src/modules/mail/mail.repository.js';
 import { createMailService } from '../src/modules/mail/mail.service.js';
+import type { NotificationJobRecord } from '../src/modules/notifications/notification.repository.js';
+import { createWhatsappWebhookService } from '../src/modules/notifications/whatsapp-webhook.service.js';
 import { createRequireOwnerAuth } from '../src/modules/public/owner-auth.middleware.js';
 import { createOwnerAuthService } from '../src/modules/public/owner-auth.service.js';
 import { createOwnerMailService } from '../src/modules/public/owner-mail.service.js';
@@ -20,7 +22,9 @@ import { createStaffService } from '../src/modules/staff/staff.service.js';
 import {
   createAuditRepositoryFake,
   createLotRepositoryFake,
+  createMailNotifierFake,
   createMailRepositoryFake,
+  createNotificationRepositoryFake,
   createPublicSessionsRepositoryFake,
   createStaffRepositoryFake,
   createStaffSessionsRepositoryFake,
@@ -30,6 +34,15 @@ export const ADMIN_PASSWORD = 'contrasena-admin-123';
 export const GUARD_PASSWORD = 'contrasena-guard-123';
 export const ADMIN_ORIGIN = 'http://localhost:4200';
 export const OWNER_PIN = '1234';
+export const WEBHOOK_APP_SECRET = 'secreto-de-prueba-para-firmas';
+export const WEBHOOK_VERIFY_TOKEN = 'token-de-verificacion-prueba';
+
+const silentLogger = {
+  debug: (): void => undefined,
+  info: (): void => undefined,
+  warn: (): void => undefined,
+  error: (): void => undefined,
+};
 
 const FIXED_NOW = new Date('2026-03-01T12:00:00.000Z');
 const MILLISECONDS_PER_MINUTE = 60 * 1000;
@@ -84,6 +97,7 @@ export interface TestAppOptions {
   now?: Date;
   lots?: LotRecord[];
   mail?: MailItemRecord[];
+  notifications?: NotificationJobRecord[];
 }
 
 export function buildTestApp(options: TestAppOptions = {}) {
@@ -93,6 +107,8 @@ export function buildTestApp(options: TestAppOptions = {}) {
   const audit = createAuditRepositoryFake();
   const lots = createLotRepositoryFake(options.lots ?? [activeLot, inactiveLot]);
   const mail = createMailRepositoryFake(options.mail ?? []);
+  const notifier = createMailNotifierFake();
+  const notificationJobs = createNotificationRepositoryFake(options.notifications ?? []);
   const ownerSessions = createPublicSessionsRepositoryFake();
   const cookie = { secureCookies: false, sessionTtlMs: 60_000 };
   const ownerCookie = { secureCookies: false, sessionTtlMs: OWNER_SESSION_TTL_MS };
@@ -148,7 +164,15 @@ export function buildTestApp(options: TestAppOptions = {}) {
       mail,
       lots,
       audit,
+      notifier,
       now: () => now,
+    }),
+    notifications: notifier,
+    whatsappWebhook: createWhatsappWebhookService({
+      appSecret: WEBHOOK_APP_SECRET,
+      verifyToken: WEBHOOK_VERIFY_TOKEN,
+      jobs: notificationJobs,
+      logger: silentLogger,
     }),
     ownerAuth,
     ownerMail: createOwnerMailService({ mail }),
@@ -166,6 +190,8 @@ export function buildTestApp(options: TestAppOptions = {}) {
     lots,
     mail,
     audit,
+    notifier,
+    notificationJobs,
     ownerAuth,
     ownerSessions,
     ownerCookie,

@@ -1,7 +1,12 @@
-# Solo desarrollo: publica MongoDB en loopback para correr la API fuera de Docker.
-# Nunca usar este archivo en producción.
-# MONGO_HOST_PORT permite convivir con un MongoDB local que ya use 27017.
+# Solo desarrollo: publica MongoDB y Redis en loopback para correr la API y el
+# worker fuera de Docker. Nunca usar este archivo en producción.
+# MONGO_HOST_PORT/REDIS_HOST_PORT permiten convivir con servicios locales que
+# ya usen los puertos por defecto.
 services:
   mongo:
     ports:
       - '127.0.0.1:${MONGO_HOST_PORT:-27017}:27017'
+
+  redis:
+    ports:
+      - '127.0.0.1:${REDIS_HOST_PORT:-6379}:6379'

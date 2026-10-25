@@ -1,5 +1,6 @@
 import type { RequestHandler } from 'express';
 import { env } from './config/env.js';
+import { logger } from './config/logger.js';
 import type { AuthService } from './modules/auth/auth.service.js';
 import { createAuthService } from './modules/auth/auth.service.js';
 import type { SessionCookieConfig } from './modules/auth/auth.middleware.js';
@@ -14,6 +15,15 @@ import { createLotsService } from './modules/lots/lots.service.js';
 import { mailRepository } from './modules/mail/mail.repository.js';
 import type { MailService } from './modules/mail/mail.service.js';
 import { createMailService } from './modules/mail/mail.service.js';
+import { createBullNotificationQueue } from './modules/notifications/notification-queue.js';
+import { notificationRepository } from './modules/notifications/notification.repository.js';
+import type { MailNotifier } from './modules/notifications/notification.service.js';
+import {
+  createDisabledNotifier,
+  createNotificationService,
+} from './modules/notifications/notification.service.js';
+import type { WhatsappWebhookService } from './modules/notifications/whatsapp-webhook.service.js';
+import { createWhatsappWebhookService } from './modules/notifications/whatsapp-webhook.service.js';
 import { createRequireOwnerAuth } from './modules/public/owner-auth.middleware.js';
 import type { OwnerAuthService } from './modules/public/owner-auth.service.js';
 import { createOwnerAuthService } from './modules/public/owner-auth.service.js';
@@ -38,6 +48,8 @@ export interface AppDependencies {
   lots: LotsService;
   staff: StaffService;
   mail: MailService;
+  notifications: MailNotifier;
+  whatsappWebhook: WhatsappWebhookService;
   ownerAuth: OwnerAuthService;
   ownerMail: OwnerMailService;
   requireStaffAuth: RequestHandler;
@@ -45,6 +57,19 @@ export interface AppDependencies {
   cookie: SessionCookieConfig;
   ownerCookie: SessionCookieConfig;
   allowedOrigin: string | undefined;
+}
+
+function createNotifier(): MailNotifier {
+  if (!env.NOTIFICATIONS_ENABLED || env.REDIS_URL === undefined) {
+    return createDisabledNotifier();
+  }
+
+  return createNotificationService({
+    jobs: notificationRepository,
+    queue: createBullNotificationQueue(env.REDIS_URL, logger),
+    logger,
+    enabled: true,
+  });
 }
 
 export function createDefaultDependencies(): AppDependencies {
@@ -91,6 +116,14 @@ export function createDefaultDependencies(): AppDependencies {
     dummyPasswordHash: DUMMY_SECRET_HASH,
   });
 
+  const notifier = createNotifier();
+  const whatsappWebhook = createWhatsappWebhookService({
+    appSecret: env.WHATSAPP_APP_SECRET,
+    verifyToken: env.WHATSAPP_WEBHOOK_VERIFY_TOKEN,
+    jobs: notificationRepository,
+    logger,
+  });
+
   return {
     auth,
     lots: createLotsService({
@@ -109,8 +142,11 @@ export function createDefaultDependencies(): AppDependencies {
       mail: mailRepository,
       lots: lotRepository,
       audit: auditRepository,
+      notifier,
       now: () => new Date(),
     }),
+    notifications: notifier,
+    whatsappWebhook,
     ownerAuth,
     ownerMail: createOwnerMailService({ mail: mailRepository }),
     requireStaffAuth: createRequireStaffAuth(auth, cookie),

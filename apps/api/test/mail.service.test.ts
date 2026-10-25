@@ -7,6 +7,7 @@ import { AppError } from '../src/shared/errors.js';
 import {
   createAuditRepositoryFake,
   createLotRepositoryFake,
+  createMailNotifierFake,
   createMailRepositoryFake,
 } from './fakes.js';
 
@@ -31,14 +32,16 @@ function buildService(lots: LotRecord[] = [activeLot, inactiveLot]) {
   const lotRepository = createLotRepositoryFake(lots);
   const mail = createMailRepositoryFake();
   const audit = createAuditRepositoryFake();
+  const notifier = createMailNotifierFake();
   const service = createMailService({
     mail,
     lots: lotRepository,
     audit,
+    notifier,
     now: () => NOW,
   });
 
-  return { service, mail, audit };
+  return { service, mail, audit, notifier };
 }
 
 async function expectAppError(promise: Promise<unknown>, code: string): Promise<void> {
@@ -138,6 +141,31 @@ describe('mailService.register', () => {
     const item = await service.register(guard, { lotNumber: '42', description: '' });
 
     expect(item.description).toBeNull();
+  });
+
+  it('notifica al lote con los contactos configurados', async () => {
+    const { service, notifier } = buildService();
+
+    const item = await service.register(guard, { lotNumber: '42', description: 'Carta' });
+
+    expect(notifier.inputs).toEqual([
+      {
+        mailItemId: item.id,
+        lotId: activeLot.id,
+        lotNumber: activeLot.lotNumber,
+        contacts: activeLot.contacts,
+      },
+    ]);
+  });
+
+  it('guarda la correspondencia aunque la notificación falle', async () => {
+    const { service, notifier, mail } = buildService();
+    notifier.failNextCall();
+
+    const item = await service.register(guard, { lotNumber: '42' });
+
+    expect(item.id).toBeDefined();
+    expect(mail.records.get(item.id)).toBeDefined();
   });
 });
 

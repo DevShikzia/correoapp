@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { AuditLogModel } from '../src/modules/audit/audit-log.model.js';
 import { LotModel } from '../src/modules/lots/lot.model.js';
 import { MailItemModel } from '../src/modules/mail/mail-item.model.js';
+import { NotificationJobModel } from '../src/modules/notifications/notification-job.model.js';
 import { PublicSessionModel } from '../src/modules/public/public-session.model.js';
 import { StaffUserModel } from '../src/modules/staff/staff-user.model.js';
 
@@ -47,6 +48,18 @@ describe('índices de los modelos', () => {
     const ttlIndex = PublicSessionModel.schema.indexes().find(([fields]) => 'expiresAt' in fields);
 
     expect(ttlIndex?.[1]).toMatchObject({ expireAfterSeconds: 0 });
+  });
+
+  it('NotificationJob es único por correspondencia y teléfono', () => {
+    const uniqueIndex = NotificationJobModel.schema
+      .indexes()
+      .find(([fields]) => 'mailItemId' in fields && 'phone' in fields);
+
+    expect(uniqueIndex).toBeDefined();
+    expect(uniqueIndex?.[1]).toMatchObject({ unique: true });
+    expect(indexKeys(NotificationJobModel.schema.indexes())).toEqual(
+      expect.arrayContaining(['status,createdAt']),
+    );
   });
 });
 

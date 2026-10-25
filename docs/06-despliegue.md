@@ -32,23 +32,27 @@ No copiar contraseñas reales en `docker-compose.yml`. Mantener Mongo/Redis fuer
 
 ### Compose en desarrollo
 
-`infra/compose/docker-compose.dev.yml` publica MongoDB solo en loopback para poder
-ejecutar la API fuera de Docker. El puerto local es configurable:
+`infra/compose/docker-compose.dev.yml` publica MongoDB y Redis solo en loopback para poder
+ejecutar la API y el worker fuera de Docker. Los puertos locales son configurables:
 
 ```powershell
 docker compose --env-file .env `
   -f infra/compose/docker-compose.yml `
-  -f infra/compose/docker-compose.dev.yml up -d mongo
+  -f infra/compose/docker-compose.dev.yml up -d mongo redis
 ```
 
 - `MONGO_HOST_PORT` (por defecto `27017`) define el puerto del host. Si ya existe un
   MongoDB nativo en `27017`, usar `27018` para convivir sin detenerlo.
-- Las credenciales salen de `MONGO_ROOT_USER` y `MONGO_ROOT_PASSWORD` del `.env`.
+- `REDIS_HOST_PORT` (por defecto `6379`) define el puerto local de Redis.
+- Las credenciales de Mongo salen de `MONGO_ROOT_USER` y `MONGO_ROOT_PASSWORD` del `.env`.
+  Redis no tiene contraseña porque no se publica fuera de loopback ni de la red interna.
+- Redis usa AOF (`appendfsync everysec`), `maxmemory 256mb` y política `noeviction` para
+  no perder avisos de la cola. La API y el worker se conectan con `REDIS_URL`.
 - Usar `--env-file .env` explícito para evitar ambigüedad entre proyectos Compose.
-- `down` conserva el volumen `compose_mongo-data`; no usar `down -v` salvo que se
-  quieran borrar los datos a propósito.
-- En producción este archivo de desarrollo no se usa: MongoDB queda solo en la red
-  interna de Compose.
+- `down` conserva los volúmenes `compose_mongo-data` y `compose_redis-data`; no usar
+  `down -v` salvo que se quieran borrar los datos a propósito.
+- En producción este archivo de desarrollo no se usa: MongoDB y Redis quedan solo en la
+  red interna de Compose.
 
 ## Notebook de 4 GB RAM
 - Ubuntu Server sin entorno gráfico.
@@ -61,13 +65,14 @@ docker compose --env-file .env `
 ## Publicación
 1. Actualizar Ubuntu; usuario admin no-root y SSH seguro.
 2. Configurar firewall para SSH y conexiones salientes; no abrir puertos entrantes de aplicación.
-3. Levantar servicios internos y probar localmente.
+3. Levantar servicios internos (MongoDB, Redis, API y worker) y probar localmente.
 4. Crear backup y restaurarlo en un entorno de prueba.
 5. Registrar dominio y agregarlo a Cloudflare.
 6. Crear Cloudflare Tunnel hacia Nginx local.
 7. Verificar HTTPS, cookies seguras, CORS, rate limits y logs.
 8. Probar reinicio de servicios y de la notebook.
-9. Habilitar WhatsApp después de completar pruebas de privacidad.
+9. Configurar el webhook de WhatsApp con HTTPS y el token de verificación.
+10. Habilitar WhatsApp (`NOTIFICATIONS_ENABLED=true`) después de completar pruebas de privacidad.
 
 ## Backups
 - Ejecutar `mongodump` con autenticación, comprimir y cifrar.

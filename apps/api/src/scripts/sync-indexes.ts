@@ -4,10 +4,18 @@ import { connectDatabase, disconnectDatabase } from '../db/mongoose.js';
 import { AuditLogModel } from '../modules/audit/audit-log.model.js';
 import { LotModel } from '../modules/lots/lot.model.js';
 import { MailItemModel } from '../modules/mail/mail-item.model.js';
+import { NotificationJobModel } from '../modules/notifications/notification-job.model.js';
 import { PublicSessionModel } from '../modules/public/public-session.model.js';
 import { StaffUserModel } from '../modules/staff/staff-user.model.js';
 
-const MODELS = [LotModel, StaffUserModel, MailItemModel, AuditLogModel, PublicSessionModel];
+const MODELS = [
+  LotModel,
+  StaffUserModel,
+  MailItemModel,
+  NotificationJobModel,
+  AuditLogModel,
+  PublicSessionModel,
+];
 
 async function syncIndexes(): Promise<void> {
   if (env.MONGODB_URI === undefined) {

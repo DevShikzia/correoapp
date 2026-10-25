@@ -19,6 +19,9 @@
     "vitest": "5.0.5"
   },
   "dependencies": {
+    "bullmq": "^6.4.2",
+    "ioredis": "^6.0.0",
+    "mongoose": "9.11.4",
     "pino": "10.4.0",
     "zod": "4.6.7"
   }

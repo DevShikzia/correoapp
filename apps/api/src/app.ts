@@ -9,6 +9,7 @@ import { noStore } from './middleware/no-store.js';
 import { createAuthRouter } from './modules/auth/auth.routes.js';
 import { createLotsRouter } from './modules/lots/lots.routes.js';
 import { createMailRouter } from './modules/mail/mail.routes.js';
+import { createWhatsappWebhookRouter } from './modules/notifications/whatsapp-webhook.routes.js';
 import { createPublicRouter } from './modules/public/public.routes.js';
 import { createStaffRouter } from './modules/staff/staff.routes.js';
 import { healthRouter } from './routes/health.routes.js';
@@ -32,6 +33,14 @@ export function createApp(
 
   app.use(helmet());
   app.use(pinoHttp({ logger }));
+
+  // El webhook de WhatsApp se autentica con firma HMAC, no con cookies ni origen.
+  // Debe montarse antes del guard de `Origin` y del parser JSON global.
+  app.use(
+    '/api/webhooks/whatsapp',
+    noStore,
+    createWhatsappWebhookRouter({ service: dependencies.whatsappWebhook }),
+  );
 
   // Antes de parsear el cuerpo: así los errores de JSON inválido también
   // conservan `no-store` y pasan por el guard de origen.
