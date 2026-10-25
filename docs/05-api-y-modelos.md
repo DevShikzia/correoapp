@@ -26,10 +26,12 @@ Las rutas `/public/*` obtienen el lote de la sesión verificada. Nunca aceptan u
 - `PATCH /staff/:id` — activar/desactivar/actualizar rol con reglas estrictas.
 
 ## Correspondencia
-- `POST /mail`
+- `POST /mail` — recibe `lotNumber`, `description` opcional y `receivedAt` opcional. El servidor resuelve el lote (debe existir y estar activo) y toma `receivedBy` de la sesión; nunca del cuerpo.
 - `GET /mail/pending?page=&limit=`
 - `GET /mail/:id`
 - `PATCH /mail/:id/deliver`
+
+La entrega es una transición `pending → delivered` con actualización condicional atómica: una segunda solicitud responde `409 CONFLICT` y no genera otra auditoría. `receivedAt` no puede ser futura. Cada alta y cada entrega se registran en `AuditLog` (`mail.created`, `mail.delivered`) con actor, lote y `requestId`.
 
 Solo usuarios autorizados pueden usar endpoints internos. Validar transiciones de estado en el servicio.
 
@@ -42,6 +44,7 @@ Solo usuarios autorizados pueden usar endpoints internos. Validar transiciones d
 - Fechas guardadas como `Date` UTC.
 - Índices únicos para `Lot.lotNumber` y `StaffUser.username`.
 - Índices para `MailItem` por `lotId + receivedAt` y `status + receivedAt`.
+- `MailItem` copia el número de lote al registrar para listar sin joins; el número de lote no se modifica después de crearlo.
 - Índice TTL en `PublicSession.expiresAt`.
 - Índices de auditoría por `createdAt` y `lotId + createdAt`.
 - No confiar en IDs recibidos: validar formato y autorización.

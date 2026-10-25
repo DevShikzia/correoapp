@@ -1,4 +1,5 @@
 import { model, Schema, type HydratedDocument, type Types } from 'mongoose';
+import { LOT_NUMBER_PATTERN } from '../lots/lot.constants.js';
 
 export const MAIL_STATUSES = ['pending', 'delivered'] as const;
 
@@ -8,6 +9,8 @@ const DESCRIPTION_MAX_LENGTH = 200;
 
 export interface MailItemAttrs {
   lotId: Types.ObjectId;
+  // Se copia el número al registrar para listar sin joins; el número de lote es inmutable.
+  lotNumber: string;
   description: string | null;
   receivedAt: Date;
   receivedBy: Types.ObjectId;
@@ -21,6 +24,7 @@ export interface MailItemAttrs {
 const mailItemSchema = new Schema<MailItemAttrs>(
   {
     lotId: { type: Schema.Types.ObjectId, ref: 'Lot', required: true },
+    lotNumber: { type: String, required: true, trim: true, match: LOT_NUMBER_PATTERN },
     description: { type: String, trim: true, maxlength: DESCRIPTION_MAX_LENGTH, default: null },
     receivedAt: { type: Date, required: true, default: () => new Date() },
     receivedBy: { type: Schema.Types.ObjectId, ref: 'StaffUser', required: true },

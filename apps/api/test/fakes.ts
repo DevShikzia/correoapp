@@ -12,6 +12,11 @@ import type {
 } from '../src/modules/lots/lots.repository.js';
 import type { LotListQuery } from '../src/modules/lots/lots.validator.js';
 import type {
+  CreateMailItemInput,
+  MailItemRecord,
+  MailRepository,
+} from '../src/modules/mail/mail.repository.js';
+import type {
   CreateStaffRecordInput,
   StaffRepository,
   StaffUserRecord,
@@ -259,6 +264,90 @@ export function createStaffSessionsRepositoryFake(
           records.delete(id);
         }
       }
+    },
+  };
+}
+
+export interface MailRepositoryFake extends MailRepository {
+  records: Map<string, MailItemRecord>;
+  failNextDeliveryWithConflict(): void;
+}
+
+export function createMailRepositoryFake(seed: MailItemRecord[] = []): MailRepositoryFake {
+  const records = new Map(seed.map((record) => [record.id, record]));
+  let sequence = records.size;
+  let failNextDelivery = false;
+
+  return {
+    records,
+
+    failNextDeliveryWithConflict(): void {
+      failNextDelivery = true;
+    },
+
+    async create(input: CreateMailItemInput): Promise<MailItemRecord> {
+      sequence += 1;
+      const now = new Date();
+      const record: MailItemRecord = {
+        id: `mail-${sequence}`,
+        lotId: input.lotId,
+        lotNumber: input.lotNumber,
+        description: input.description,
+        receivedAt: input.receivedAt,
+        receivedBy: input.receivedBy,
+        status: 'pending',
+        deliveredAt: null,
+        deliveredBy: null,
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      records.set(record.id, record);
+      return record;
+    },
+
+    async findById(id: string): Promise<MailItemRecord | null> {
+      return records.get(id) ?? null;
+    },
+
+    async listPending(page: number, limit: number): Promise<Paginated<MailItemRecord>> {
+      const pending = [...records.values()]
+        .filter((record) => record.status === 'pending')
+        .sort((first, second) => first.receivedAt.getTime() - second.receivedAt.getTime());
+
+      return {
+        items: pending.slice((page - 1) * limit, page * limit),
+        page,
+        limit,
+        total: pending.length,
+      };
+    },
+
+    async markDelivered(
+      id: string,
+      deliveredBy: string,
+      deliveredAt: Date,
+    ): Promise<MailItemRecord | null> {
+      if (failNextDelivery) {
+        failNextDelivery = false;
+        return null;
+      }
+
+      const record = records.get(id);
+      if (record === undefined || record.status !== 'pending') {
+        return null;
+      }
+
+      const updated: MailItemRecord = {
+        ...record,
+        status: 'delivered',
+        deliveredAt,
+        deliveredBy,
+        updatedAt: new Date(),
+      };
+
+      records.set(id, updated);
+      return updated;
     },
   };
 }

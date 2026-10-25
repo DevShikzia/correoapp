@@ -8,6 +8,7 @@ import { errorHandler, notFoundHandler } from './middleware/error-handler.js';
 import { noStore } from './middleware/no-store.js';
 import { createAuthRouter } from './modules/auth/auth.routes.js';
 import { createLotsRouter } from './modules/lots/lots.routes.js';
+import { createMailRouter } from './modules/mail/mail.routes.js';
 import { createStaffRouter } from './modules/staff/staff.routes.js';
 import { healthRouter } from './routes/health.routes.js';
 import { createOriginGuard } from './shared/origin-guard.js';
@@ -50,6 +51,13 @@ export function createApp(
     '/api/lots',
     createLotsRouter({
       service: dependencies.lots,
+      requireAuth: dependencies.requireStaffAuth,
+    }),
+  );
+  app.use(
+    '/api/mail',
+    createMailRouter({
+      service: dependencies.mail,
       requireAuth: dependencies.requireStaffAuth,
     }),
   );

@@ -1,102 +1,22 @@
 import request from 'supertest';
 import { describe, expect, it } from 'vitest';
-import { createApp } from '../src/app.js';
-import type { AppDependencies } from '../src/dependencies.js';
 import {
   GENERIC_LOGIN_ERROR_MESSAGE,
   LOGIN_MAX_ATTEMPTS,
   LOGIN_RATE_LIMIT_MESSAGE,
 } from '../src/modules/auth/auth.constants.js';
-import { createAuthService } from '../src/modules/auth/auth.service.js';
-import { createRequireStaffAuth } from '../src/modules/auth/auth.middleware.js';
-import { createAttemptLimiter } from '../src/modules/auth/login-rate-limit.js';
-import type { StaffUserRecord } from '../src/modules/staff/staff.repository.js';
-import { createStaffService } from '../src/modules/staff/staff.service.js';
-import { createLotsService } from '../src/modules/lots/lots.service.js';
 import {
-  createAuditRepositoryFake,
-  createLotRepositoryFake,
-  createStaffRepositoryFake,
-  createStaffSessionsRepositoryFake,
-} from './fakes.js';
-
-const ADMIN_PASSWORD = 'contrasena-admin-123';
-const GUARD_PASSWORD = 'contrasena-guard-123';
-const ADMIN_ORIGIN = 'http://localhost:4200';
-
-const adminRecord: StaffUserRecord = {
-  id: 'staff-admin',
-  username: 'admin.uno',
-  passwordHash: `hash:${ADMIN_PASSWORD}`,
-  role: 'admin',
-  active: true,
-  lastLoginAt: null,
-  createdAt: new Date('2026-01-01T00:00:00.000Z'),
-  updatedAt: new Date('2026-01-01T00:00:00.000Z'),
-};
-
-const guardRecord: StaffUserRecord = {
-  ...adminRecord,
-  id: 'staff-guard',
-  username: 'vigilante.uno',
-  passwordHash: `hash:${GUARD_PASSWORD}`,
-  role: 'guard',
-};
-
-const inactiveRecord: StaffUserRecord = {
-  ...guardRecord,
-  id: 'staff-inactive',
-  username: 'vigilante.inactivo',
-  active: false,
-};
-
-function buildTestApp(options: { allowedOrigin?: string } = {}) {
-  const staff = createStaffRepositoryFake([adminRecord, guardRecord, inactiveRecord]);
-  const sessions = createStaffSessionsRepositoryFake();
-  const audit = createAuditRepositoryFake();
-  const lots = createLotRepositoryFake();
-  const cookie = { secureCookies: false, sessionTtlMs: 60_000 };
-
-  const auth = createAuthService({
-    staff,
-    sessions,
-    limiter: createAttemptLimiter({
-      maxAttempts: LOGIN_MAX_ATTEMPTS,
-      windowMs: 60_000,
-      now: () => new Date('2026-03-01T12:00:00.000Z'),
-    }),
-    verifyPassword: (passwordHash, password) =>
-      Promise.resolve(passwordHash === `hash:${password}`),
-    createToken: () => `token-${sessions.records.size + 1}-${Math.random()}`,
-    hashToken: (token) => `sha256:${token}`,
-    now: () => new Date('2026-03-01T12:00:00.000Z'),
-    sessionTtlMs: cookie.sessionTtlMs,
-    dummyPasswordHash: 'hash:contrasena-inexistente',
-  });
-
-  const dependencies: AppDependencies = {
-    auth,
-    lots: createLotsService({
-      lots,
-      audit,
-      hashPin: (pin) => Promise.resolve(`pin:${pin}`),
-    }),
-    staff: createStaffService({
-      staff,
-      audit,
-      hashPassword: (password) => Promise.resolve(`hash:${password}`),
-      sessions,
-    }),
-    requireStaffAuth: createRequireStaffAuth(auth, cookie),
-    cookie,
-    allowedOrigin: options.allowedOrigin,
-  };
-
-  return { app: createApp(dependencies), staff, sessions, lots, audit };
-}
+  ADMIN_ORIGIN,
+  ADMIN_PASSWORD,
+  GUARD_PASSWORD,
+  adminRecord,
+  buildTestApp,
+  guardRecord,
+  inactiveRecord,
+} from './test-app.js';
 
 const NEW_LOT = {
-  lotNumber: '42',
+  lotNumber: '77',
   ownerNames: ['Ana Pérez'],
   contacts: [{ name: 'Ana Pérez', phone: '+5491122334455' }],
   pin: '1234',
@@ -302,9 +222,9 @@ describe('autorización por rol en las rutas', () => {
       .send({ username: adminRecord.username, password: ADMIN_PASSWORD })
       .expect(200);
 
-    const empty = await agent.get('/api/lots');
-    expect(empty.status).toBe(200);
-    expect(empty.body.meta.total).toBe(0);
+    const initial = await agent.get('/api/lots');
+    expect(initial.status).toBe(200);
+    expect(initial.body.meta.total).toBe(2);
 
     const created = await agent.post('/api/lots').send(NEW_LOT);
     expect(created.status).toBe(201);
@@ -312,7 +232,7 @@ describe('autorización por rol en las rutas', () => {
     expect(JSON.stringify(created.body)).not.toContain('pin:');
 
     const listed = await agent.get('/api/lots');
-    expect(listed.body.meta.total).toBe(1);
+    expect(listed.body.meta.total).toBe(3);
   });
 
   it('mantiene las respuestas privadas fuera de caché', async () => {

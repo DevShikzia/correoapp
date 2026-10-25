@@ -52,4 +52,14 @@ describe('valores permitidos', () => {
   it('StaffUser solo acepta roles conocidos', () => {
     expect(StaffUserModel.schema.path('role').options['enum']).toEqual(['admin', 'guard']);
   });
+
+  it('AuditLog registra las acciones de correspondencia', () => {
+    expect(AuditLogModel.schema.path('action').options['enum']).toEqual(
+      expect.arrayContaining(['mail.created', 'mail.delivered']),
+    );
+  });
+
+  it('MailItem guarda el número de lote resuelto por el servidor', () => {
+    expect(MailItemModel.schema.path('lotNumber').options['required']).toBe(true);
+  });
 });

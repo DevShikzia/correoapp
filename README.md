@@ -75,12 +75,13 @@ infra/        Compose (MongoDB) y, más adelante, Nginx y scripts
 docs/         alcance, plan, estándares, seguridad, API, despliegue y pruebas
 ```
 
-Estado actual: Fase 3 (login y permisos). La API expone `/api/health`, `/api/auth` (login, logout, sesión actual), `/api/lots` y `/api/staff`, estas dos últimas solo para administradores autenticados.
+Estado actual: Fase 4 (correspondencia). La API expone `/api/health`, `/api/auth` (login, logout, sesión actual), `/api/lots` y `/api/staff` (solo administradores) y `/api/mail` (cualquier vigilador autenticado): alta, pendientes, detalle y entrega.
 
 Notas de operación:
-- Los endpoints de administración exigen la cookie de sesión `staff_session` (`HttpOnly`, `SameSite=Strict`, `Secure` en producción).
+- Todos los endpoints internos exigen la cookie de sesión `staff_session` (`HttpOnly`, `SameSite=Strict`, `Secure` en producción).
 - Con `APP_ORIGIN` definido, las peticiones `POST`/`PATCH`/`PUT`/`DELETE` deben enviar ese mismo `Origin` (protección CSRF).
 - El límite de intentos de login vive en memoria: es válido para una sola instancia de la API. En la Fase 6/7 se reemplaza por un almacenamiento compartido si se escala horizontalmente.
 - Ajustar `STAFF_SESSION_TTL_MINUTES` (por defecto 480) según la operación del barrio.
+- Al registrar correspondencia se envía el número de lote; la API valida que exista y esté activo. Los pendientes se listan del más antiguo al más nuevo y la entrega es irreversible desde la API (una segunda entrega responde `409`).
 
 

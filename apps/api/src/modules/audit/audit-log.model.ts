@@ -8,6 +8,8 @@ export const AUDIT_ACTIONS = [
   'lot.pin_reset',
   'staff.created',
   'staff.updated',
+  'mail.created',
+  'mail.delivered',
 ] as const;
 
 export type AuditActorType = (typeof AUDIT_ACTOR_TYPES)[number];

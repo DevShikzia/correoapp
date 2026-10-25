@@ -12,6 +12,9 @@ import { auditRepository } from './modules/audit/audit.repository.js';
 import { lotRepository } from './modules/lots/lots.repository.js';
 import type { LotsService } from './modules/lots/lots.service.js';
 import { createLotsService } from './modules/lots/lots.service.js';
+import { mailRepository } from './modules/mail/mail.repository.js';
+import type { MailService } from './modules/mail/mail.service.js';
+import { createMailService } from './modules/mail/mail.service.js';
 import { staffRepository } from './modules/staff/staff.repository.js';
 import type { StaffService } from './modules/staff/staff.service.js';
 import { createStaffService } from './modules/staff/staff.service.js';
@@ -24,6 +27,7 @@ export interface AppDependencies {
   auth: AuthService;
   lots: LotsService;
   staff: StaffService;
+  mail: MailService;
   requireStaffAuth: RequestHandler;
   cookie: SessionCookieConfig;
   allowedOrigin: string | undefined;
@@ -64,6 +68,12 @@ export function createDefaultDependencies(): AppDependencies {
       audit: auditRepository,
       hashPassword: hashSecret,
       sessions: staffSessionsRepository,
+    }),
+    mail: createMailService({
+      mail: mailRepository,
+      lots: lotRepository,
+      audit: auditRepository,
+      now: () => new Date(),
     }),
     requireStaffAuth: createRequireStaffAuth(auth, cookie),
     cookie,
