@@ -96,7 +96,13 @@ infra/        Compose (MongoDB) y, más adelante, Nginx y scripts
 docs/         alcance, plan, estándares, seguridad, API, despliegue y pruebas
 ```
 
-Estado actual: Fase 5 (portal del propietario). La API expone `/api/health`, `/api/auth` (login, logout, sesión actual), `/api/lots` y `/api/staff` (solo administradores), `/api/mail` (cualquier vigilador autenticado): alta, pendientes, detalle y entrega, y `/api/public` (lote + PIN): acceso, logout, sesión actual y consulta de la correspondencia del propio lote. El portal Angular `/portal` ya permite ingresar con lote + PIN, listar la correspondencia propia con paginación y cerrar sesión. Las pantallas `/staff` y `/admin` siguen siendo marcadores de posición.
+Estado actual: Fase 5 cerrada con frontend operativo. La API expone `/api/health`, `/api/auth` (login, logout, sesión actual), `/api/lots` y `/api/staff` (solo administradores), `/api/mail` (cualquier vigilador autenticado): alta, pendientes, detalle y entrega, y `/api/public` (lote + PIN): acceso, logout, sesión actual y consulta de la correspondencia del propio lote.
+
+- `/portal`: el propietario ingresa con lote + PIN, lista su correspondencia y cierra sesión.
+- `/staff`: login de vigilancia, alta de correspondencia, pendientes paginados y entrega con confirmación.
+- `/admin`: solo administradores; alta y edición de lotes, contactos, PIN, activación/desactivación y gestión de vigiladores.
+
+Tests actuales: **135 API + 30 web**, con lint, typecheck, build y formato en verde.
 
 Notas de operación:
 - Todos los endpoints internos exigen la cookie de sesión `staff_session` (`HttpOnly`, `SameSite=Strict`, `Secure` en producción).
@@ -107,5 +113,7 @@ Notas de operación:
 - Al registrar correspondencia se envía el número de lote; la API valida que exista y esté activo. Los pendientes se listan del más antiguo al más nuevo y la entrega es irreversible desde la API (una segunda entrega responde `409`).
 - Cambiar el PIN o desactivar un lote revoca de inmediato todas las sesiones de propietario de ese lote.
 - La PWA solo cachea recursos estáticos. `ngsw-config.json` no define `dataGroups`, por lo que las respuestas de `/api` no se guardan en caché; el portal tampoco usa `localStorage` ni `sessionStorage` para datos privados.
+- La navegación oculta “Administración” cuando la sesión activa es de un vigilador. El backend vuelve a validar el rol en cada petición: ocultar la pantalla no es la protección.
+- Los formularios de staff y administración no guardan contraseñas, PIN ni datos privados en el navegador.
 
 

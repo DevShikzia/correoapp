@@ -4,6 +4,7 @@
 - Unit tests para servicios/reglas de negocio.
 - Integration tests para API y base de datos.
 - Tests de autorización y aislamiento.
+- Tests de componentes Angular para login, `/staff` y `/admin`: permisos, formularios, entrega y reset de PIN.
 - Lint, typecheck y build en CI antes de integrar cambios.
 
 ## Casos críticos

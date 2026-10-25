@@ -14,13 +14,14 @@ locales viven en `.env`, que está ignorado por Git.
 - API Express + TypeScript con autenticación de staff, lotes, vigiladores,
   correspondencia, auditoría y portal de propietarios.
 - Portal Angular `/portal` con lote + PIN, listado paginado, estados y logout.
+- Interfaz `/staff` para registrar correspondencia, ver pendientes y entregar con
+  confirmación.
+- Interfaz `/admin` para lotes, contactos, PIN y gestión de vigiladores.
 - PWA con service worker; `/api` queda fuera de caché (`dataGroups: []`).
-- Pantallas `/staff` y `/admin`: todavía son marcadores de posición.
-- Tests al cierre de la Fase 5: **135 API + 9 web**, con lint, typecheck, build y
-  formato en verde.
+- Tests actuales: **135 API + 30 web**, con lint, typecheck, build y formato en verde.
 - **Docker Compose validado**: MongoDB `mongo:8.0` en `127.0.0.1:27018`, smoke
   HTTP 64/64 y datos persistentes tras reiniciar el contenedor.
-- Último pipeline completo ejecutado sobre `2946752`.
+- Último pipeline completo en verde antes de la Fase 6.
 
 ## Verificación real realizada
 
@@ -98,6 +99,25 @@ Variables opcionales del script: `SMOKE_BASE_URL` (por defecto
 `http://localhost:4200`, debe coincidir con `APP_ORIGIN`) y
 `SMOKE_GUARD_PASSWORD` (si se omite, se genera una aleatoria).
 
+## Interfaz de staff y administración
+
+El **25/10/2026** se reemplazaron los marcadores de posición por pantallas
+operativas sobre los endpoints existentes:
+
+- `/staff`: login, alta de correspondencia por número de lote, lista paginada de
+  pendientes y entrega con confirmación en dos pasos.
+- `/admin`: solo administradores; alta y edición de lotes, propietarios y
+  contactos, reset de PIN, activación/desactivación y gestión de vigiladores.
+- Sesión de staff compartida entre ambas pantallas; la navegación oculta
+  “Administración” a un vigilador, pero el backend sigue validando el rol.
+- Los formularios no guardan contraseñas, PIN ni datos privados en el navegador.
+- Cobertura: **30 tests web** (8 del portal existente + 22 nuevos: login, navegación,
+  `/staff`, `/admin`, paneles de lotes y vigiladores) además de los 135 tests de la
+  API.
+
+La interfaz fue validada con tests de componentes y build de producción. Todavía
+falta una pasada manual completa en navegador antes de considerarla cerrada.
+
 ## Entorno local
 
 - **Docker Desktop 4.96.3** con cliente `docker` 29.9.2, motor Linux y Compose
@@ -150,7 +170,7 @@ docker compose --env-file .env `
 El volumen `compose_mongo-data` permanece. No usar `down -v` salvo que se quieran
 borrar los datos de Compose a propósito.
 
-## Cierre de la Fase 5
+## Cierre de la Fase 5 y frontend operativo
 
 La validación pendiente de Docker quedó completa:
 
@@ -161,8 +181,9 @@ La validación pendiente de Docker quedó completa:
 - Los datos sobrevivieron al reinicio del contenedor y el volumen quedó conservado.
 - El MongoDB nativo y las demás bases no se vieron afectados.
 
-La Fase 5 queda cerrada. El siguiente trabajo es la Fase 6 (notificaciones por
-WhatsApp de forma asíncrona).
+Además, `/staff` y `/admin` dejaron de ser marcadores de posición y quedaron
+cubiertos por **30 tests web**. La Fase 5 queda cerrada; el siguiente trabajo es la
+Fase 6 (notificaciones por WhatsApp de forma asíncrona).
 
 ## Decisiones y comportamientos a tener presentes
 
@@ -187,7 +208,8 @@ WhatsApp de forma asíncrona).
   una red doméstica con NAT) puede bloquear a varios propietarios durante 15 minutos.
 - El MongoDB de Compose y el nativo conviven solo porque usan puertos distintos
   (`27018` y `27017`). Si se cambia `MONGO_HOST_PORT`, revisar el `.env` y la URI.
-- Las pantallas `/staff` y `/admin` no tienen interfaz real todavía.
+- Falta una pasada manual en navegador por `/staff` y `/admin` con datos reales de
+  prueba; la cobertura actual es de tests de componentes.
 - Los iconos PWA son los genéricos que genera Angular.
 - Fase 6 (WhatsApp asíncrono), backups, restauración, HTTPS y endurecimiento de
   producción siguen pendientes.
@@ -197,9 +219,8 @@ WhatsApp de forma asíncrona).
 
 1. Fase 6: interfaz `NotificationProvider`, cola BullMQ, worker con reintentos e
    idempotencia y webhook autenticado.
-2. Implementar las pantallas de staff y administración.
-3. Fase 7: endurecimiento, rate limit compartido, backups y restauración.
-4. Fase 8: despliegue en Ubuntu Server con Nginx, Cloudflare Tunnel y HTTPS.
+2. Fase 7: endurecimiento, rate limit compartido, backups y restauración.
+3. Fase 8: despliegue en Ubuntu Server con Nginx, Cloudflare Tunnel y HTTPS.
 
 ## Checklist para retomar
 
@@ -215,4 +236,6 @@ WhatsApp de forma asíncrona).
 - [x] Base descartable eliminada.
 - [x] Volumen `compose_mongo-data` conservado.
 - [x] MongoDB nativo y sus otras bases intactos.
+- [x] Pantallas `/staff` y `/admin` operativas con 30 tests web.
+- [ ] Pasada manual en navegador de `/staff` y `/admin`.
 - [ ] Fase 6.
