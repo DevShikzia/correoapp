@@ -1,0 +1,168 @@
+@if (state() === 'checking') {
+  <section class="panel">
+    <p class="muted" aria-live="polite">Verificando sesión…</p>
+  </section>
+} @else if (state() === 'login') {
+  <section class="panel">
+    <h1>Vigilancia</h1>
+    <p class="muted">Ingresá con tu usuario para registrar y entregar correspondencia.</p>
+
+    @if (actionError()) {
+      <p class="alert" role="alert">{{ actionError() }}</p>
+    }
+
+    <app-staff-login (loggedIn)="onLoggedIn()" />
+  </section>
+} @else {
+  <div class="stack">
+    <section class="panel">
+      <header class="page-header">
+        <div>
+          <h1>Vigilancia</h1>
+          <p class="muted">
+            {{ user()?.username }}
+            <span aria-hidden="true">·</span>
+            {{ user()?.role === 'admin' ? 'Administrador' : 'Vigilador' }}
+          </p>
+        </div>
+        <button type="button" class="secondary" (click)="logout()">Salir</button>
+      </header>
+
+      @if (actionSuccess()) {
+        <p class="success" role="status" aria-live="polite">{{ actionSuccess() }}</p>
+      }
+      @if (actionError()) {
+        <p class="alert" role="alert">{{ actionError() }}</p>
+      }
+    </section>
+
+    <div class="grid">
+      <section class="panel" aria-labelledby="register-title">
+        <h2 id="register-title">Registrar correspondencia</h2>
+
+        <form [formGroup]="form" (ngSubmit)="submitRegister()" novalidate>
+          <div class="field">
+            <label for="mailLotNumber">Número de lote</label>
+            <input
+              id="mailLotNumber"
+              type="text"
+              formControlName="lotNumber"
+              inputmode="numeric"
+              autocomplete="off"
+              maxlength="6"
+            />
+            @if (form.controls.lotNumber.touched && form.controls.lotNumber.invalid) {
+              <p class="field-error">Ingresá un número de lote de hasta 6 dígitos.</p>
+            }
+          </div>
+
+          <div class="field">
+            <label for="mailDescription">Descripción (opcional)</label>
+            <textarea
+              id="mailDescription"
+              formControlName="description"
+              rows="3"
+              maxlength="200"
+              placeholder="Carta, paquete, encomienda…"
+            ></textarea>
+            @if (form.controls.description.touched && form.controls.description.invalid) {
+              <p class="field-error">La descripción no puede superar 200 caracteres.</p>
+            }
+          </div>
+
+          <button type="submit" [disabled]="registering()">
+            {{ registering() ? 'Registrando…' : 'Registrar' }}
+          </button>
+        </form>
+      </section>
+
+      <section class="panel" aria-labelledby="pending-title">
+        <header class="section-header">
+          <h2 id="pending-title">Pendientes</h2>
+          <button
+            type="button"
+            class="secondary"
+            [disabled]="listLoading()"
+            (click)="goToPage(page())"
+          >
+            Actualizar
+          </button>
+        </header>
+
+        @if (listError()) {
+          <p class="alert" role="alert">{{ listError() }}</p>
+        }
+
+        @if (listLoading()) {
+          <p class="muted" aria-live="polite">Cargando pendientes…</p>
+        } @else if (pending().length > 0) {
+          <ul class="list">
+            @for (item of pending(); track item.id) {
+              <li class="list-item">
+                <div class="list-main">
+                  <p class="list-title">Lote {{ item.lotNumber }}</p>
+                  <p class="list-meta">{{ item.description || 'Sin descripción' }}</p>
+                  <p class="list-meta">
+                    Recibida el
+                    <time [attr.datetime]="item.receivedAt">{{ formatDate(item.receivedAt) }}</time>
+                  </p>
+                </div>
+
+                <div class="actions">
+                  @if (pendingDeliveryId() === item.id) {
+                    <button
+                      type="button"
+                      class="danger"
+                      [disabled]="deliveringId() === item.id"
+                      (click)="confirmDelivery(item)"
+                    >
+                      {{ deliveringId() === item.id ? 'Entregando…' : 'Confirmar entrega' }}
+                    </button>
+                    <button
+                      type="button"
+                      class="secondary"
+                      [disabled]="deliveringId() !== null"
+                      (click)="cancelDelivery()"
+                    >
+                      Cancelar
+                    </button>
+                  } @else {
+                    <button
+                      type="button"
+                      [disabled]="deliveringId() !== null"
+                      (click)="requestDelivery(item.id)"
+                    >
+                      Entregar
+                    </button>
+                  }
+                </div>
+              </li>
+            }
+          </ul>
+
+          <nav class="pagination" aria-label="Paginación de pendientes">
+            <button
+              type="button"
+              class="secondary"
+              [disabled]="listLoading() || page() === 1"
+              (click)="goToPage(page() - 1)"
+            >
+              Anterior
+            </button>
+            <span>Página {{ page() }} de {{ totalPages() }}</span>
+            <button
+              type="button"
+              class="secondary"
+              [disabled]="listLoading() || !hasNextPage()"
+              (click)="goToPage(page() + 1)"
+            >
+              Siguiente
+            </button>
+          </nav>
+        } @else if (!listError()) {
+          <p class="empty">No hay correspondencia pendiente.</p>
+        }
+      </section>
+    </div>
+  </div>
+}
