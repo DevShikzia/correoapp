@@ -27,6 +27,7 @@ Aplicación privada para registrar correspondencia recibida por aproximadamente 
 6. `docs/05-api-y-modelos.md`
 7. `docs/06-despliegue.md`
 8. `docs/07-pruebas-y-aceptacion.md`
+9. `docs/08-estado-y-continuacion.md`
 
 ## Regla de oro
 La autorización se valida en el backend en cada petición. Ocultar datos en Angular no es seguridad. Ningún propietario puede consultar datos usando un `lotId` enviado por el cliente.
@@ -67,6 +68,18 @@ ADMIN_USERNAME=admin ADMIN_PASSWORD='contraseña-de-al-menos-12' \
   pnpm --filter @correspondencia/api bootstrap:admin
 pnpm --filter @correspondencia/api sync:indexes
 ```
+
+Prueba de humo HTTP contra una base descartable (requiere un administrador de bootstrap):
+
+```bash
+SMOKE_ADMIN_USERNAME=admin.smoke \
+SMOKE_ADMIN_PASSWORD='contraseña-de-al-menos-12' \
+  pnpm smoke:http
+```
+
+El script `scripts/smoke-http.mjs` verifica cookies, permisos, aislamiento entre lotes,
+revocación de sesiones, rate limit y CSRF. No borra datos: usalo solo contra una base
+recién creada, nunca contra datos reales. Ver `docs/08-estado-y-continuacion.md`.
 
 ## Estructura
 ```text

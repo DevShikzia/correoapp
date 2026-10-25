@@ -29,5 +29,15 @@ export default tseslint.config(
       'prefer-const': 'error',
     },
   },
+  {
+    files: ['scripts/**/*.mjs'],
+    languageOptions: {
+      globals: {
+        console: 'readonly',
+        fetch: 'readonly',
+        process: 'readonly',
+      },
+    },
+  },
   prettier,
 );

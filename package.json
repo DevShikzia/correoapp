@@ -17,7 +17,8 @@
     "build": "pnpm -r --if-present build",
     "dev:api": "pnpm --filter @correspondencia/api dev",
     "dev:web": "pnpm --filter @correspondencia/web start",
-    "dev:worker": "pnpm --filter @correspondencia/worker dev"
+    "dev:worker": "pnpm --filter @correspondencia/worker dev",
+    "smoke:http": "node scripts/smoke-http.mjs"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
