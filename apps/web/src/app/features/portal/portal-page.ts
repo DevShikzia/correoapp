@@ -24,6 +24,7 @@ export class PortalPage {
     dateStyle: 'short',
     timeStyle: 'short',
   });
+  private readonly timeFormatter = new Intl.DateTimeFormat('es-AR', { timeStyle: 'short' });
 
   readonly state = signal<ViewState>('checking');
   readonly lotNumber = signal<string | null>(null);
@@ -32,9 +33,15 @@ export class PortalPage {
   readonly total = signal(0);
   readonly loading = signal(false);
   readonly errorMessage = signal<string | null>(null);
+  readonly showPin = signal(false);
+  readonly expandedId = signal<string | null>(null);
+  readonly updatedAt = signal<Date | null>(null);
 
   readonly totalPages = computed(() => Math.max(1, Math.ceil(this.total() / PAGE_SIZE)));
   readonly hasNextPage = computed(() => this.page() < this.totalPages());
+  readonly itemsLabel = computed(() =>
+    this.total() === 1 ? 'envío registrado' : 'envíos registrados',
+  );
 
   readonly form = this.formBuilder.nonNullable.group({
     lotNumber: ['', [Validators.required, Validators.pattern(LOT_NUMBER_PATTERN)]],
@@ -76,6 +83,7 @@ export class PortalPage {
       const session = await this.api.access(lotNumber, pin);
       this.lotNumber.set(session.lotNumber);
       this.form.reset({ lotNumber: '', pin: '' });
+      this.showPin.set(false);
       await this.loadMail(1);
     } catch (error) {
       this.errorMessage.set(ownerErrorMessage(error, 'access'));
@@ -93,6 +101,7 @@ export class PortalPage {
       this.items.set(result.items);
       this.page.set(result.meta.page);
       this.total.set(result.meta.total);
+      this.updatedAt.set(new Date());
       this.state.set('mail');
     } catch (error) {
       if (isUnauthorized(error)) {
@@ -107,11 +116,20 @@ export class PortalPage {
     }
   }
 
+  async refresh(): Promise<void> {
+    if (this.loading()) {
+      return;
+    }
+
+    await this.loadMail(this.page());
+  }
+
   async goToPage(page: number): Promise<void> {
     if (this.loading() || page < 1 || page > this.totalPages()) {
       return;
     }
 
+    this.expandedId.set(null);
     await this.loadMail(page);
   }
 
@@ -129,14 +147,34 @@ export class PortalPage {
     }
   }
 
-  formatDate(value: string): string {
-    const date = new Date(value);
+  togglePin(): void {
+    this.showPin.update((visible) => !visible);
+  }
 
-    return Number.isNaN(date.getTime()) ? '' : this.dateFormatter.format(date);
+  toggleDetails(id: string): void {
+    this.expandedId.update((current) => (current === id ? null : id));
+  }
+
+  isExpanded(id: string): boolean {
+    return this.expandedId() === id;
+  }
+
+  formatDate(value: string): string {
+    return this.formatWith(this.dateFormatter, value);
+  }
+
+  formatTime(value: Date): string {
+    return this.timeFormatter.format(value);
   }
 
   statusLabel(item: OwnerMailItem): string {
     return item.status === 'delivered' ? 'Entregada' : 'Pendiente';
+  }
+
+  private formatWith(formatter: Intl.DateTimeFormat, value: string): string {
+    const date = new Date(value);
+
+    return Number.isNaN(date.getTime()) ? '' : formatter.format(date);
   }
 
   private resetToAccess(message: string | null): void {
@@ -146,6 +184,9 @@ export class PortalPage {
     this.page.set(1);
     this.total.set(0);
     this.errorMessage.set(message);
+    this.expandedId.set(null);
+    this.updatedAt.set(null);
+    this.showPin.set(false);
     this.form.reset({ lotNumber: '', pin: '' });
   }
 }

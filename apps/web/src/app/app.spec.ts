@@ -1,9 +1,13 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { Component } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
 import type { StaffUser } from './core/staff.models';
 import { App } from './app';
+
+@Component({ selector: 'app-test-portal', template: '' })
+class TestPortalPage {}
 
 const GUARD_USER: StaffUser = {
   id: 'staff-guard',
@@ -27,7 +31,11 @@ describe('App', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [App],
-      providers: [provideRouter([]), provideHttpClient(), provideHttpClientTesting()],
+      providers: [
+        provideRouter([{ path: 'portal', component: TestPortalPage }]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+      ],
     }).compileComponents();
 
     fixture = TestBed.createComponent(App);
@@ -60,6 +68,25 @@ describe('App', () => {
     const compiled = fixture.nativeElement as HTMLElement;
 
     expect(compiled.querySelectorAll('nav a')).toHaveLength(2);
+    expect(compiled.textContent).not.toContain('Administración');
+  });
+
+  it('no muestra la navegación interna dentro del portal', async () => {
+    httpMock
+      .expectOne('/api/auth/me')
+      .flush(
+        { error: { code: 'UNAUTHORIZED', message: 'Sesión requerida.' } },
+        { status: 401, statusText: 'Unauthorized' },
+      );
+    await settle(fixture);
+
+    await TestBed.inject(Router).navigateByUrl('/portal');
+    await settle(fixture);
+
+    const compiled = fixture.nativeElement as HTMLElement;
+
+    expect(compiled.querySelector('nav')).toBeNull();
+    expect(compiled.textContent).not.toContain('Vigilancia');
     expect(compiled.textContent).not.toContain('Administración');
   });
 });

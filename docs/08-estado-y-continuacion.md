@@ -1,8 +1,8 @@
 # 8. Estado actual y continuación
 
-Registro de estado al **25/10/2026**. El código de la aplicación corresponde al commit
-`b93e648` (`feat(web): add owner portal and offline-safe PWA`); este documento y el
-script de humo se agregaron después, sin cambios funcionales.
+Registro de estado al **25/10/2026**. El código incluye las fases 0 a 6 y el rediseño
+del portal de propietarios. Los últimos commits están en `main`; este documento se
+actualiza junto con cada fase.
 
 Este documento resume lo hecho, lo verificado, lo que falta y los pasos exactos para
 retomar después de reiniciar Windows. No contiene contraseñas ni secretos: los valores
@@ -10,18 +10,22 @@ locales viven en `.env`, que está ignorado por Git.
 
 ## Resumen funcional
 
-- Fases 0 a 5 del plan completadas.
+- Fases 0 a 6 del plan implementadas.
 - API Express + TypeScript con autenticación de staff, lotes, vigiladores,
   correspondencia, auditoría y portal de propietarios.
 - Portal Angular `/portal` con lote + PIN, listado paginado, estados y logout.
+  Es una vista pública independiente: no muestra enlaces a Vigilancia ni Administración.
 - Interfaz `/staff` para registrar correspondencia, ver pendientes y entregar con
   confirmación.
 - Interfaz `/admin` para lotes, contactos, PIN y gestión de vigiladores.
+- Notificaciones por WhatsApp asíncronas con cola BullMQ, worker separado, reintentos
+  limitados, idempotencia y webhook autenticado. Apagadas por defecto.
 - PWA con service worker; `/api` queda fuera de caché (`dataGroups: []`).
-- Tests actuales: **135 API + 30 web**, con lint, typecheck, build y formato en verde.
-- **Docker Compose validado**: MongoDB `mongo:8.0` en `127.0.0.1:27018`, smoke
-  HTTP 64/64 y datos persistentes tras reiniciar el contenedor.
-- Último pipeline completo en verde antes de la Fase 6.
+- Tests actuales: **149 API + 11 worker + 34 web**, con lint, typecheck, build y formato
+  en verde.
+- **Docker Compose validado** con `docker compose config`: MongoDB `mongo:8.0` y Redis
+  `redis:7.4-alpine`, ambos en red interna y publicados solo en loopback en desarrollo.
+- Último pipeline completo en verde.
 
 ## Verificación real realizada
 
@@ -129,28 +133,33 @@ falta una pasada manual completa en navegador antes de considerarla cerrada.
 - **MongoDB de Compose** (`mongo:8.0`) se publica en `127.0.0.1:${MONGO_HOST_PORT}`
   mediante `infra/compose/docker-compose.dev.yml`. Para convivir con el nativo,
   el `.env` local usa `MONGO_HOST_PORT=27018`.
-- El `.env` local apunta por defecto al MongoDB nativo para el desarrollo diario.
-  La prueba contra Compose se hace con un override de `MONGODB_URI` en la shell.
+- **Redis de Compose** (`redis:7.4-alpine`) se publica en
+  `127.0.0.1:${REDIS_HOST_PORT}` (por defecto `6379`) solo en desarrollo. En la
+  configuración base no tiene `ports:`.
+- El `.env` local apunta por defecto al MongoDB nativo para el desarrollo diario y a
+  `redis://127.0.0.1:6379` para la cola. La prueba contra Compose se hace con un
+  override de `MONGODB_URI` en la shell.
 - Los comandos de Compose deben usar `--env-file .env` de forma explícita para que
   el puerto y las credenciales se resuelvan sin ambigüedad.
 
-## Cómo levantar el MongoDB de Compose
+## Cómo levantar MongoDB y Redis de Compose
 
 Desde la raíz del repositorio:
 
 ```powershell
 docker compose --env-file .env `
   -f infra/compose/docker-compose.yml `
-  -f infra/compose/docker-compose.dev.yml up -d mongo
+  -f infra/compose/docker-compose.dev.yml up -d mongo redis
 
 docker compose --env-file .env `
   -f infra/compose/docker-compose.yml `
   -f infra/compose/docker-compose.dev.yml ps
 ```
 
-El contenedor debe quedar `healthy` y publicado solo en loopback. Para apuntar la
-API al Mongo de Compose, construir la URI con las credenciales del `.env` y el
-puerto `MONGO_HOST_PORT`:
+Los contenedores deben quedar `healthy` y publicados solo en loopback. Para verificar
+Redis: `docker compose ... exec redis redis-cli ping` debe responder `PONG`. Para
+apuntar la API al Mongo de Compose, construir la URI con las credenciales del `.env` y
+el puerto `MONGO_HOST_PORT`:
 
 ```powershell
 $mongoUser = ((Get-Content .env | Where-Object { $_ -match '^MONGO_ROOT_USER=' }) -split '=',2)[1]
@@ -159,7 +168,7 @@ $env:MONGODB_URI = "mongodb://${mongoUser}:${mongoPassword}@127.0.0.1:27018/corr
 pnpm dev:api
 ```
 
-Para bajar el contenedor conservando los datos:
+Para bajar los contenedores conservando los datos:
 
 ```powershell
 docker compose --env-file .env `
@@ -167,8 +176,8 @@ docker compose --env-file .env `
   -f infra/compose/docker-compose.dev.yml down
 ```
 
-El volumen `compose_mongo-data` permanece. No usar `down -v` salvo que se quieran
-borrar los datos de Compose a propósito.
+Los volúmenes `compose_mongo-data` y `compose_redis-data` permanecen. No usar
+`down -v` salvo que se quieran borrar los datos de Compose a propósito.
 
 ## Cierre de la Fase 5 y frontend operativo
 
@@ -182,8 +191,78 @@ La validación pendiente de Docker quedó completa:
 - El MongoDB nativo y las demás bases no se vieron afectados.
 
 Además, `/staff` y `/admin` dejaron de ser marcadores de posición y quedaron
-cubiertos por **30 tests web**. La Fase 5 queda cerrada; el siguiente trabajo es la
-Fase 6 (notificaciones por WhatsApp de forma asíncrona).
+cubiertos por **30 tests web**. La Fase 5 quedó cerrada con esos 30 tests.
+
+## Fase 6 — WhatsApp asíncrono
+
+Implementada el **25/10/2026**. Flujo completo:
+
+1. `POST /mail` resuelve el lote desde la sesión del vigilador y guarda `MailItem`.
+2. Registra la auditoría `mail.created`.
+3. Si `NOTIFICATIONS_ENABLED=true`, crea un `NotificationJob` por teléfono único
+   (índice único `{ mailItemId, phone }`) con estado `pending`.
+4. Encola cada aviso en BullMQ con `jobId = notificationId` para evitar duplicados.
+5. Si el encolado falla, el aviso queda `pending` y el alta responde 201 igual: el
+   fallo de WhatsApp o de Redis nunca revierte la correspondencia.
+6. El worker (`apps/worker`) toma el aviso, no reenvía estados `sent`/`failed`, llama
+   al proveedor y actualiza `sent`, `queued` (reintento) o `failed`.
+7. Los errores 4xx del proveedor (salvo 408/429) son definitivos y usan
+   `UnrecoverableError`; 408/429/5xx, red y timeout se reintentan con backoff exponencial.
+8. El webhook valida la firma HMAC y confirma `sent`/`delivered`/`read`/`failed`.
+
+Configuración principal:
+
+- `NOTIFICATIONS_ENABLED=false` por defecto. Sin activarlo no se crean avisos ni se
+  conecta Redis, tanto en la API como en el worker.
+- `WHATSAPP_PROVIDER`: `console` para desarrollo (no envía mensajes reales) o `meta`
+  para WhatsApp Cloud API.
+- `WHATSAPP_TEMPLATE_NAME` y `WHATSAPP_TEMPLATE_LANGUAGE`: plantilla aprobada con una
+  variable en el cuerpo (`{{1}}` = número de lote). **No se envía la descripción ni
+  otros datos de la correspondencia**, según `docs/04-seguridad-y-privacidad.md`.
+- `WHATSAPP_APP_SECRET` valida `X-Hub-Signature-256`; `WHATSAPP_WEBHOOK_VERIFY_TOKEN`
+  responde el challenge del `GET`.
+- `NOTIFICATION_MAX_ATTEMPTS`, `NOTIFICATION_BACKOFF_MS` y `NOTIFICATION_CONCURRENCY`.
+
+El worker es un proceso desplegable aparte y mantiene un modelo espejo de
+`NotificationJob` y las constantes de la cola. Si las notificaciones están apagadas,
+queda inactivo sin tocar MongoDB ni Redis.
+
+Se agregaron `bullmq` e `ioredis` a la API y `bullmq`, `ioredis` y `mongoose` al worker.
+Redis se sumó a Compose con AOF, `maxmemory 256mb`, `noeviction`, healthcheck y sin
+puerto en la configuración base (loopback solo en el override de desarrollo).
+
+Pruebas: **14 tests nuevos en la API** (servicio de notificaciones, webhook, mail y
+modelo) y **11 del worker** (procesador y proveedor Meta).
+
+Pendiente de la Fase 6:
+
+- Probar con credenciales y plantilla reales de Meta: no hay secretos disponibles.
+- Levantar el Redis de Compose y correr un envío end-to-end con el proveedor `console`;
+  hoy se validó `docker compose config` y los tests usan fakes.
+- Endpoint `POST /notifications/:id/retry` para administradores (previsto para Fase 7).
+- Configurar el webhook público con HTTPS y validarlo desde Meta.
+
+## Portal de propietarios separado y rediseñado
+
+El **25/10/2026** el portal dejó de compartir la interfaz interna:
+
+- La barra de navegación compartida solo se muestra en `/staff` y `/admin`. En
+  `/portal` el propietario ve una barra propia con la marca y, si tiene sesión, su lote
+  y el botón “Salir”. No hay enlaces a Vigilancia ni Administración.
+- El backend sigue validando la sesión de propietario y el rol de staff; ocultar la
+  navegación no es la protección.
+- Rediseño: fondo con gradientes suaves, tarjeta de acceso con PIN visible/ocultable,
+  ayudas de validación, estado de carga, tarjetas de correspondencia con detalle
+  expandible, botón “Actualizar”, estado vacío ilustrado y animaciones que respetan
+  `prefers-reduced-motion`.
+- Enfoque **mobile-first**: la base es una columna con el formulario antes que las
+  ventajas, controles de al menos 44 px, campos de 16 px para evitar el zoom de iOS y
+  `env(safe-area-inset-*)` en la barra y el pie. Las mejoras llegan desde `521px`
+  (fila de correspondencia y paginación) y `861px` (grilla de dos columnas).
+- Se ajustó el presupuesto `anyComponentStyle` de Angular a 12 kB (aviso) / 16 kB
+  (error): el CSS del portal supera el límite anterior de 8 kB.
+- Cobertura: **34 tests web** (30 previos + 3 de interacción del portal + 1 de
+  separación de la navegación).
 
 ## Decisiones y comportamientos a tener presentes
 
@@ -201,6 +280,17 @@ Fase 6 (notificaciones por WhatsApp de forma asíncrona).
 - La PWA no cachea respuestas de `/api` y el portal no usa `localStorage` ni
   `sessionStorage` para datos privados.
 - El formato de fechas del portal usa `Intl.DateTimeFormat('es-AR')`.
+- Las notificaciones se guardan antes de enviarse: primero `MailItem` + auditoría, luego
+  `NotificationJob` y recién después la cola. Un fallo de WhatsApp nunca revierte el alta.
+- El aviso de WhatsApp solo incluye el número de lote. La descripción de la
+  correspondencia no se envía ni se guarda en `NotificationJob`.
+- El worker y la API duplican a propósito el modelo `NotificationJob` y las constantes
+  de la cola porque son procesos desplegables separados.
+- El webhook de WhatsApp se monta antes del guard de `Origin` y del parser JSON global,
+  porque lo invoca Meta y se autentica con HMAC sobre el cuerpo crudo.
+- Los estados `sent`/`failed` no se reenvían; los reintentos normales reutilizan el mismo
+  registro (`jobId = notificationId`).
+- `NOTIFICATIONS_ENABLED=false` es el valor por defecto: sin activarlo no se usa Redis.
 
 ## Riesgos y deuda pendiente
 
@@ -208,19 +298,27 @@ Fase 6 (notificaciones por WhatsApp de forma asíncrona).
   una red doméstica con NAT) puede bloquear a varios propietarios durante 15 minutos.
 - El MongoDB de Compose y el nativo conviven solo porque usan puertos distintos
   (`27018` y `27017`). Si se cambia `MONGO_HOST_PORT`, revisar el `.env` y la URI.
-- Falta una pasada manual en navegador por `/staff` y `/admin` con datos reales de
-  prueba; la cobertura actual es de tests de componentes.
+- Falta una pasada manual en navegador por `/staff`, `/admin` y el rediseño del portal
+  con datos reales de prueba; la cobertura actual es de tests de componentes.
+- El proveedor `meta` no se probó contra la API real: faltan credenciales y una plantilla
+  aprobada. El proveedor `console` tampoco se probó todavía contra un Redis real.
+- Composer/Redis de Compose se validó con `docker compose config`; falta levantar Redis y
+  confirmar un envío end-to-end (encolado → worker → estado `sent`).
+- La cola no tiene una tarea de reconciliación para avisos `pending` que quedaron sin
+  encolar por una caída de Redis.
+- El endpoint de reintento manual para administradores sigue pendiente.
+- El presupuesto de CSS del portal se amplió a 12/16 kB; conviene dividir la vista en
+  componentes si sigue creciendo.
 - Los iconos PWA son los genéricos que genera Angular.
-- Fase 6 (WhatsApp asíncrono), backups, restauración, HTTPS y endurecimiento de
-  producción siguen pendientes.
+- Backups, restauración, HTTPS y endurecimiento de producción siguen pendientes.
 - No se probó el flujo en un dispositivo móvil real ni la instalación de la PWA.
 
 ## Próximos pasos sugeridos
 
-1. Fase 6: interfaz `NotificationProvider`, cola BullMQ, worker con reintentos e
-   idempotencia y webhook autenticado.
-2. Fase 7: endurecimiento, rate limit compartido, backups y restauración.
+1. Levantar Redis de Compose y correr un envío end-to-end con `WHATSAPP_PROVIDER=console`.
+2. Fase 7: endurecimiento, rate limit compartido, reintento manual, backups y restauración.
 3. Fase 8: despliegue en Ubuntu Server con Nginx, Cloudflare Tunnel y HTTPS.
+4. Configurar Meta y validar la plantilla real antes de habilitar WhatsApp en producción.
 
 ## Checklist para retomar
 
@@ -237,5 +335,10 @@ Fase 6 (notificaciones por WhatsApp de forma asíncrona).
 - [x] Volumen `compose_mongo-data` conservado.
 - [x] MongoDB nativo y sus otras bases intactos.
 - [x] Pantallas `/staff` y `/admin` operativas con 30 tests web.
-- [ ] Pasada manual en navegador de `/staff` y `/admin`.
-- [ ] Fase 6.
+- [x] Portal separado de la navegación interna y rediseñado (34 tests web).
+- [x] Fase 6 implementada: cola BullMQ, worker, reintentos, idempotencia y webhook.
+- [x] Redis agregado a Compose y `.env.example` actualizado.
+- [x] `docker compose config` válido con `mongo` y `redis`.
+- [ ] Levantar Redis y probar un envío end-to-end con el proveedor `console`.
+- [ ] Probar el proveedor `meta` con credenciales y plantilla reales.
+- [ ] Pasada manual en navegador de `/portal`, `/staff` y `/admin`.

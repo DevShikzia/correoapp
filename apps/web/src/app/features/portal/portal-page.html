@@ -1,118 +1,351 @@
-@if (state() === 'checking') {
-  <section class="panel">
-    <p class="muted" aria-live="polite">Verificando sesión…</p>
-  </section>
-} @else if (state() === 'access') {
-  <section class="panel">
-    <h1>Consultá tu correspondencia</h1>
-    <p class="muted">Ingresá con el número de lote y el PIN de tu familia.</p>
+<div class="portal">
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <rect x="3" y="5" width="18" height="14" rx="3" />
+          <path d="m4 7 8 6 8-6" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+      </span>
+      <div class="brand-text">
+        <p class="brand-name">Correspondencia</p>
+        <p class="brand-sub">Portal de vecinos</p>
+      </div>
+    </div>
 
-    @if (errorMessage()) {
-      <p class="alert" role="alert">{{ errorMessage() }}</p>
+    @if (state() === 'mail' && lotNumber(); as lot) {
+      <div class="topbar-actions">
+        <span class="lot-chip"
+          >Lote <strong>{{ lot }}</strong></span
+        >
+        <button class="ghost" type="button" (click)="logout()" [disabled]="loading()">Salir</button>
+      </div>
+    } @else {
+      <span class="pill">Acceso privado</span>
     }
+  </header>
 
-    <form [formGroup]="form" (ngSubmit)="submitAccess()" novalidate>
-      <div class="field">
-        <label for="lotNumber">Número de lote</label>
-        <input
-          id="lotNumber"
-          type="text"
-          formControlName="lotNumber"
-          inputmode="numeric"
-          autocomplete="off"
-          maxlength="6"
-        />
-        @if (form.controls.lotNumber.touched && form.controls.lotNumber.invalid) {
-          <p class="field-error">Ingresá un número de lote de hasta 6 dígitos.</p>
-        }
-      </div>
+  <div class="content">
+    @if (state() === 'checking') {
+      <section class="card checking" aria-live="polite">
+        <span class="spinner spinner--lg" aria-hidden="true"></span>
+        <p class="muted">Verificando sesión…</p>
+      </section>
+    } @else if (state() === 'access') {
+      <div class="access-grid">
+        <section class="intro" aria-labelledby="access-title">
+          <p class="eyebrow">Acceso privado</p>
+          <h1 id="access-title">Consultá tu correspondencia</h1>
+          <p class="lead">
+            Ingresá con el número de lote y el PIN de tu familia. Vas a ver únicamente los envíos de
+            tu lote, sin datos de otros vecinos.
+          </p>
+        </section>
 
-      <div class="field">
-        <label for="pin">PIN</label>
-        <input
-          id="pin"
-          type="password"
-          formControlName="pin"
-          inputmode="numeric"
-          autocomplete="off"
-          maxlength="8"
-        />
-        @if (form.controls.pin.touched && form.controls.pin.invalid) {
-          <p class="field-error">El PIN tiene entre 4 y 8 dígitos.</p>
-        }
-      </div>
+        <section class="card access-card" aria-labelledby="access-form-title">
+          <h2 id="access-form-title">Ingresar</h2>
+          <p class="card-sub">Usá los datos que te entregó la administración.</p>
 
-      <button type="submit" [disabled]="loading()">
-        {{ loading() ? 'Ingresando…' : 'Ingresar' }}
-      </button>
-    </form>
+          @if (errorMessage()) {
+            <p class="alert" role="alert">
+              <span class="alert-icon" aria-hidden="true">!</span>
+              {{ errorMessage() }}
+            </p>
+          }
 
-    <p class="privacy-note">Solo vas a ver la correspondencia de tu lote.</p>
-  </section>
-} @else {
-  <section class="panel">
-    <header class="mail-header">
-      <div>
-        <h1>Correspondencia</h1>
-        <p class="muted">
-          Lote <strong>{{ lotNumber() }}</strong>
-        </p>
-      </div>
-      <button type="button" class="secondary" (click)="logout()" [disabled]="loading()">
-        Salir
-      </button>
-    </header>
-
-    @if (errorMessage()) {
-      <p class="alert" role="alert">{{ errorMessage() }}</p>
-    }
-    @if (loading()) {
-      <p class="muted" aria-live="polite">Cargando correspondencia…</p>
-    } @else if (items().length > 0) {
-      <ul class="mail-list">
-        @for (item of items(); track item.id) {
-          <li class="mail-item">
-            <div>
-              <p class="mail-description">{{ item.description || 'Sin descripción' }}</p>
-              <p class="mail-date">
-                Recibida el
-                <time [attr.datetime]="item.receivedAt">{{ formatDate(item.receivedAt) }}</time>
-              </p>
-              @if (item.deliveredAt) {
-                <p class="mail-date">
-                  Entregada el
-                  <time [attr.datetime]="item.deliveredAt">{{ formatDate(item.deliveredAt) }}</time>
-                </p>
+          <form [formGroup]="form" (ngSubmit)="submitAccess()" novalidate>
+            <div class="field">
+              <label for="lotNumber">Número de lote</label>
+              <input
+                id="lotNumber"
+                type="text"
+                formControlName="lotNumber"
+                inputmode="numeric"
+                autocomplete="off"
+                maxlength="6"
+                placeholder="Por ejemplo, 42"
+              />
+              @if (form.controls.lotNumber.touched && form.controls.lotNumber.invalid) {
+                <p class="field-error">Ingresá un número de lote de hasta 6 dígitos.</p>
+              } @else {
+                <p class="hint">Solo números.</p>
               }
             </div>
-            <span class="status" [class.delivered]="item.status === 'delivered'">
-              {{ statusLabel(item) }}
-            </span>
-          </li>
-        }
-      </ul>
 
-      <nav class="pagination" aria-label="Paginación">
-        <button
-          type="button"
-          class="secondary"
-          [disabled]="loading() || page() === 1"
-          (click)="goToPage(page() - 1)"
-        >
-          Anterior
-        </button>
-        <span>Página {{ page() }} de {{ totalPages() }}</span>
-        <button
-          type="button"
-          class="secondary"
-          [disabled]="loading() || !hasNextPage()"
-          (click)="goToPage(page() + 1)"
-        >
-          Siguiente
-        </button>
-      </nav>
-    } @else if (!errorMessage()) {
-      <p class="empty">No tenés correspondencia registrada.</p>
+            <div class="field">
+              <label for="pin">PIN</label>
+              <div class="input-wrap">
+                <input
+                  id="pin"
+                  [type]="showPin() ? 'text' : 'password'"
+                  formControlName="pin"
+                  inputmode="numeric"
+                  autocomplete="off"
+                  maxlength="8"
+                  placeholder="••••"
+                />
+                <button
+                  class="peek"
+                  type="button"
+                  (click)="togglePin()"
+                  [attr.aria-pressed]="showPin()"
+                  [attr.aria-label]="showPin() ? 'Ocultar PIN' : 'Mostrar PIN'"
+                  [title]="showPin() ? 'Ocultar PIN' : 'Mostrar PIN'"
+                >
+                  @if (showPin()) {
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                      <path
+                        d="m3 3 18 18M10.6 5.8A10.9 10.9 0 0 1 12 5.7c6 0 9.5 6.3 9.5 6.3a17 17 0 0 1-3 3.8M6.3 6.9A17 17 0 0 0 2.5 12S6 18.3 12 18.3a10 10 0 0 0 4.2-.9"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      />
+                    </svg>
+                  } @else {
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                      <path
+                        d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"
+                        stroke-linejoin="round"
+                      />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                  }
+                </button>
+              </div>
+              @if (form.controls.pin.touched && form.controls.pin.invalid) {
+                <p class="field-error">El PIN tiene entre 4 y 8 dígitos.</p>
+              } @else {
+                <p class="hint">Entre 4 y 8 dígitos.</p>
+              }
+            </div>
+
+            <button class="primary" type="submit" [disabled]="loading()">
+              @if (loading()) {
+                <span class="spinner" aria-hidden="true"></span>
+              }
+              {{ loading() ? 'Ingresando…' : 'Ingresar' }}
+            </button>
+          </form>
+
+          <p class="privacy-note">
+            No compartas tu PIN. Si no lo recordás, pedilo en la administración.
+          </p>
+        </section>
+
+        <ul class="trust">
+          <li>
+            <span class="trust-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <path
+                  d="M12 3 5 6v5c0 4.5 3 8 7 10 4-2 7-5.5 7-10V6l-7-3Z"
+                  stroke-linejoin="round"
+                />
+                <path d="m9 12 2 2 4-4" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </span>
+            <div>
+              <p class="trust-title">Solo tu lote</p>
+              <p class="trust-text">La sesión queda atada al lote que ingresa.</p>
+            </div>
+          </li>
+          <li>
+            <span class="trust-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <path
+                  d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"
+                  stroke-linejoin="round"
+                />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+            </span>
+            <div>
+              <p class="trust-title">Sin datos personales</p>
+              <p class="trust-text">No mostramos teléfonos, contactos ni hashes.</p>
+            </div>
+          </li>
+          <li>
+            <span class="trust-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <circle cx="12" cy="12" r="9" />
+                <path d="M12 7.5V12l3 2" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </span>
+            <div>
+              <p class="trust-title">Sesión temporal</p>
+              <p class="trust-text">Se cierra sola después de un tiempo de inactividad.</p>
+            </div>
+          </li>
+        </ul>
+      </div>
+    } @else {
+      <section class="mail-view">
+        <div class="welcome">
+          <div>
+            <p class="eyebrow">
+              Lote <strong>{{ lotNumber() }}</strong>
+            </p>
+            <h1>Tu correspondencia</h1>
+            <p class="lead">
+              @if (total() === 0) {
+                Todavía no hay envíos registrados para tu lote.
+              } @else {
+                Tenés {{ total() }} {{ itemsLabel() }}.
+              }
+            </p>
+          </div>
+
+          <button class="ghost" type="button" (click)="refresh()" [disabled]="loading()">
+            <svg
+              class="refresh-icon"
+              [class.spinning]="loading()"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              aria-hidden="true"
+            >
+              <path d="M20 11a8 8 0 1 0-2.3 6.7" stroke-linecap="round" />
+              <path d="M20 4v7h-7" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            Actualizar
+          </button>
+        </div>
+
+        <div class="toolbar">
+          <p class="count">
+            <strong>{{ total() }}</strong> {{ itemsLabel() }}
+          </p>
+          @if (updatedAt(); as updated) {
+            <p class="muted small">Actualizado a las {{ formatTime(updated) }}</p>
+          }
+        </div>
+
+        @if (errorMessage()) {
+          <p class="alert" role="alert">
+            <span class="alert-icon" aria-hidden="true">!</span>
+            {{ errorMessage() }}
+          </p>
+        }
+
+        @if (loading() && items().length === 0) {
+          <div aria-hidden="true">
+            <div class="skeleton-list">
+              <div class="skeleton"></div>
+              <div class="skeleton"></div>
+              <div class="skeleton"></div>
+            </div>
+          </div>
+          <p class="sr-only" aria-live="polite">Cargando correspondencia…</p>
+        } @else if (items().length > 0) {
+          <ul class="mail-list" [attr.aria-busy]="loading()">
+            @for (item of items(); track item.id; let index = $index) {
+              <li
+                class="mail-card"
+                [class.mail-card--delivered]="item.status === 'delivered'"
+                [style.animation-delay.ms]="index * 45"
+              >
+                <div class="mail-row">
+                  <span class="status-dot" aria-hidden="true"></span>
+                  <div class="mail-main">
+                    <p class="mail-description">{{ item.description || 'Sin descripción' }}</p>
+                    <p class="mail-date">
+                      Recibida el
+                      <time [attr.datetime]="item.receivedAt">{{
+                        formatDate(item.receivedAt)
+                      }}</time>
+                    </p>
+                  </div>
+                  <span class="status" [class.status--delivered]="item.status === 'delivered'">
+                    {{ statusLabel(item) }}
+                  </span>
+                </div>
+
+                <button
+                  class="details-toggle"
+                  type="button"
+                  [attr.aria-expanded]="isExpanded(item.id)"
+                  [attr.aria-controls]="'mail-details-' + item.id"
+                  (click)="toggleDetails(item.id)"
+                >
+                  {{ isExpanded(item.id) ? 'Ocultar detalles' : 'Ver detalles' }}
+                  <svg
+                    class="chevron"
+                    [class.chevron--open]="isExpanded(item.id)"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    aria-hidden="true"
+                  >
+                    <path d="m6 9 6 6 6-6" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                </button>
+
+                @if (isExpanded(item.id)) {
+                  <dl class="mail-details" [id]="'mail-details-' + item.id">
+                    <div>
+                      <dt>Estado</dt>
+                      <dd>{{ statusLabel(item) }}</dd>
+                    </div>
+                    <div>
+                      <dt>Recibida</dt>
+                      <dd>
+                        <time [attr.datetime]="item.receivedAt">{{
+                          formatDate(item.receivedAt)
+                        }}</time>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Entregada</dt>
+                      <dd>{{ item.deliveredAt ? formatDate(item.deliveredAt) : 'Todavía no' }}</dd>
+                    </div>
+                  </dl>
+                }
+              </li>
+            }
+          </ul>
+
+          <nav class="pagination" aria-label="Paginación">
+            <button
+              class="ghost"
+              type="button"
+              [disabled]="loading() || page() === 1"
+              (click)="goToPage(page() - 1)"
+            >
+              Anterior
+            </button>
+            <span class="page-info">Página {{ page() }} de {{ totalPages() }}</span>
+            <button
+              class="ghost"
+              type="button"
+              [disabled]="loading() || !hasNextPage()"
+              (click)="goToPage(page() + 1)"
+            >
+              Siguiente
+            </button>
+          </nav>
+        } @else if (!errorMessage()) {
+          <div class="empty">
+            <span class="empty-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+                <path
+                  d="M4 9.5 12 4l8 5.5V19a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V9.5Z"
+                  stroke-linejoin="round"
+                />
+                <path d="M4 9.5h16M8 13h8" stroke-linecap="round" />
+              </svg>
+            </span>
+            <p class="empty-title">No tenés correspondencia registrada.</p>
+            <p class="muted">Cuando llegue un envío para tu lote, lo vas a ver acá.</p>
+            <button class="ghost" type="button" (click)="refresh()" [disabled]="loading()">
+              Volver a consultar
+            </button>
+          </div>
+        }
+      </section>
     }
-  </section>
-}
+  </div>
+
+  <footer class="foot">
+    <p>Acceso privado para propietarios · No compartas tu PIN con otras personas.</p>
+  </footer>
+</div>

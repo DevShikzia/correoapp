@@ -1,14 +1,16 @@
-<header class="app-header">
-  <span class="app-title">Correspondencia</span>
-  <nav aria-label="Secciones">
-    <a routerLink="/portal" routerLinkActive="active">Portal</a>
-    <a routerLink="/staff" routerLinkActive="active">Vigilancia</a>
-    @if (showAdmin()) {
-      <a routerLink="/admin" routerLinkActive="active">Administración</a>
-    }
-  </nav>
-</header>
+@if (!isPortal()) {
+  <header class="app-header">
+    <span class="app-title">Correspondencia</span>
+    <nav aria-label="Secciones">
+      <a routerLink="/portal" routerLinkActive="active">Portal</a>
+      <a routerLink="/staff" routerLinkActive="active">Vigilancia</a>
+      @if (showAdmin()) {
+        <a routerLink="/admin" routerLinkActive="active">Administración</a>
+      }
+    </nav>
+  </header>
+}
 
-<main class="app-main">
+<main class="app-main" [class.app-main--full]="isPortal()">
   <router-outlet />
 </main>

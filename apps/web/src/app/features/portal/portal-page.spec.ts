@@ -233,4 +233,58 @@ describe('PortalPage', () => {
 
     expect(textOf(fixture)).toContain('Página 2 de 2');
   });
+
+  it('permite mostrar y ocultar el PIN', async () => {
+    await flushAnonymousSession();
+
+    const pin = () =>
+      (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>('#pin');
+    const peek = () =>
+      (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('.peek');
+
+    expect(pin()?.type).toBe('password');
+
+    peek()?.click();
+    await settle(fixture);
+
+    expect(pin()?.type).toBe('text');
+    expect(peek()?.getAttribute('aria-pressed')).toBe('true');
+    expect(peek()?.getAttribute('aria-label')).toBe('Ocultar PIN');
+
+    peek()?.click();
+    await settle(fixture);
+
+    expect(pin()?.type).toBe('password');
+  });
+
+  it('expande y contrae el detalle de un envío', async () => {
+    await loginAndLoad();
+
+    buttonByText(fixture, 'Ver detalles')?.click();
+    await settle(fixture);
+
+    const toggle = (fixture.nativeElement as HTMLElement).querySelector('.details-toggle');
+
+    expect(toggle?.getAttribute('aria-expanded')).toBe('true');
+    expect(textOf(fixture)).toContain('Todavía no');
+
+    buttonByText(fixture, 'Ocultar detalles')?.click();
+    await settle(fixture);
+
+    expect(textOf(fixture)).not.toContain('Todavía no');
+  });
+
+  it('actualiza la lista desde el botón Actualizar', async () => {
+    await loginAndLoad();
+
+    buttonByText(fixture, 'Actualizar')?.click();
+    await settle(fixture);
+
+    httpMock
+      .expectOne('/api/public/mail?page=1&limit=10')
+      .flush({ data: [MAIL_ITEM], meta: { page: 1, limit: 10, total: 1 } });
+    await settle(fixture);
+
+    expect(textOf(fixture)).toContain('Actualizado a las');
+  });
 });

@@ -41,3 +41,8 @@ nav a:hover {
   flex: 1;
   padding: 1.5rem;
 }
+
+/* El portal dibuja su propio fondo y ocupa todo el ancho disponible. */
+.app-main--full {
+  padding: 0;
+}
