@@ -28,6 +28,7 @@ export interface MailRepository {
   create(input: CreateMailItemInput): Promise<MailItemRecord>;
   findById(id: string): Promise<MailItemRecord | null>;
   listPending(page: number, limit: number): Promise<Paginated<MailItemRecord>>;
+  listByLot(lotId: string, page: number, limit: number): Promise<Paginated<MailItemRecord>>;
   markDelivered(id: string, deliveredBy: string, deliveredAt: Date): Promise<MailItemRecord | null>;
 }
 
@@ -79,6 +80,24 @@ export const mailRepository: MailRepository = {
     const [documents, total] = await Promise.all([
       MailItemModel.find(filter)
         .sort({ receivedAt: 1, _id: 1 })
+        .skip((page - 1) * limit)
+        .limit(limit),
+      MailItemModel.countDocuments(filter),
+    ]);
+
+    return { items: documents.map(toRecord), page, limit, total };
+  },
+
+  async listByLot(lotId: string, page: number, limit: number): Promise<Paginated<MailItemRecord>> {
+    if (!isValidObjectId(lotId)) {
+      return { items: [], page, limit, total: 0 };
+    }
+
+    const filter = { lotId: new Types.ObjectId(lotId) };
+
+    const [documents, total] = await Promise.all([
+      MailItemModel.find(filter)
+        .sort({ receivedAt: -1, _id: -1 })
         .skip((page - 1) * limit)
         .limit(limit),
       MailItemModel.countDocuments(filter),

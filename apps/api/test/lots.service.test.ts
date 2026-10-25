@@ -2,11 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { createLotsService } from '../src/modules/lots/lots.service.js';
 import type { Actor } from '../src/shared/actor.js';
 import { AppError } from '../src/shared/errors.js';
-import { createAuditRepositoryFake, createLotRepositoryFake } from './fakes.js';
+import {
+  createAuditRepositoryFake,
+  createLotRepositoryFake,
+  createPublicSessionsRepositoryFake,
+  type PublicSessionsRepositoryFake,
+} from './fakes.js';
 
 const admin: Actor = { id: 'staff-1', role: 'admin' };
 const guard: Actor = { id: 'staff-2', role: 'guard' };
-
 const NEW_LOT = {
   lotNumber: '42',
   ownerNames: ['Ana Pérez'],
@@ -17,18 +21,34 @@ const NEW_LOT = {
 function buildService() {
   const lots = createLotRepositoryFake();
   const audit = createAuditRepositoryFake();
+  const ownerSessions = createPublicSessionsRepositoryFake();
   const service = createLotsService({
     lots,
     audit,
     hashPin: (pin) => Promise.resolve(`hash:${pin}`),
+    ownerSessions,
   });
 
-  return { service, lots, audit };
+  return { service, lots, audit, ownerSessions };
 }
 
 async function expectAppError(promise: Promise<unknown>, code: string): Promise<void> {
   await expect(promise).rejects.toBeInstanceOf(AppError);
   await expect(promise).rejects.toMatchObject({ code });
+}
+
+function seedOwnerSession(
+  ownerSessions: PublicSessionsRepositoryFake,
+  lotId: string,
+  id: string,
+): void {
+  ownerSessions.records.set(id, {
+    id,
+    tokenHash: `sha256:${id}`,
+    lotId,
+    expiresAt: new Date('2026-03-01T12:30:00.000Z'),
+    createdAt: new Date('2026-03-01T12:00:00.000Z'),
+  });
 }
 
 describe('lotsService.create', () => {
@@ -124,5 +144,47 @@ describe('lotsService.resetPin', () => {
     const lot = await service.create(admin, NEW_LOT);
 
     await expectAppError(service.resetPin(guard, lot.id, '9999'), 'FORBIDDEN');
+  });
+
+  it('revoca las sesiones del propietario del lote', async () => {
+    const { service, ownerSessions } = buildService();
+    const lot = await service.create(admin, NEW_LOT);
+    const other = await service.create(admin, { ...NEW_LOT, lotNumber: '99' });
+    seedOwnerSession(ownerSessions, lot.id, 'owner-session-1');
+    seedOwnerSession(ownerSessions, other.id, 'owner-session-2');
+
+    await service.resetPin(admin, lot.id, '9999');
+
+    expect(ownerSessions.records.has('owner-session-1')).toBe(false);
+    expect(ownerSessions.records.has('owner-session-2')).toBe(true);
+  });
+});
+
+describe('lotsService.update', () => {
+  it('revoca las sesiones cuando se desactiva el lote', async () => {
+    const { service, ownerSessions } = buildService();
+    const lot = await service.create(admin, NEW_LOT);
+    seedOwnerSession(ownerSessions, lot.id, 'owner-session-1');
+
+    await service.update(admin, lot.id, { active: false });
+
+    expect(ownerSessions.records.size).toBe(0);
+  });
+
+  it('conserva las sesiones si el lote sigue activo', async () => {
+    const { service, ownerSessions } = buildService();
+    const lot = await service.create(admin, NEW_LOT);
+    seedOwnerSession(ownerSessions, lot.id, 'owner-session-1');
+
+    await service.update(admin, lot.id, { ownerNames: ['Otra Persona'] });
+
+    expect(ownerSessions.records.has('owner-session-1')).toBe(true);
+  });
+
+  it('no permite modificar lotes a un vigilador', async () => {
+    const { service } = buildService();
+    const lot = await service.create(admin, NEW_LOT);
+
+    await expectAppError(service.update(guard, lot.id, { active: false }), 'FORBIDDEN');
   });
 });

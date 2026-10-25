@@ -6,7 +6,6 @@ import type { SessionCookieConfig } from './modules/auth/auth.middleware.js';
 import { createRequireStaffAuth } from './modules/auth/auth.middleware.js';
 import { staffSessionsRepository } from './modules/auth/auth-sessions.repository.js';
 import { LOGIN_ATTEMPT_WINDOW_MS, LOGIN_MAX_ATTEMPTS } from './modules/auth/auth.constants.js';
-import { DUMMY_PASSWORD_HASH } from './modules/auth/dummy-password-hash.js';
 import { createAttemptLimiter } from './modules/auth/login-rate-limit.js';
 import { auditRepository } from './modules/audit/audit.repository.js';
 import { lotRepository } from './modules/lots/lots.repository.js';
@@ -15,10 +14,21 @@ import { createLotsService } from './modules/lots/lots.service.js';
 import { mailRepository } from './modules/mail/mail.repository.js';
 import type { MailService } from './modules/mail/mail.service.js';
 import { createMailService } from './modules/mail/mail.service.js';
+import { createRequireOwnerAuth } from './modules/public/owner-auth.middleware.js';
+import type { OwnerAuthService } from './modules/public/owner-auth.service.js';
+import { createOwnerAuthService } from './modules/public/owner-auth.service.js';
+import type { OwnerMailService } from './modules/public/owner-mail.service.js';
+import { createOwnerMailService } from './modules/public/owner-mail.service.js';
+import {
+  OWNER_ACCESS_MAX_ATTEMPTS,
+  OWNER_ACCESS_WINDOW_MS,
+} from './modules/public/public.constants.js';
+import { publicSessionsRepository } from './modules/public/public-sessions.repository.js';
 import { staffRepository } from './modules/staff/staff.repository.js';
 import type { StaffService } from './modules/staff/staff.service.js';
 import { createStaffService } from './modules/staff/staff.service.js';
 import { hashSecret, verifySecret } from './shared/password.js';
+import { DUMMY_SECRET_HASH } from './shared/dummy-hash.js';
 import { createSessionToken, hashSessionToken } from './shared/session-token.js';
 
 const MILLISECONDS_PER_MINUTE = 60 * 1000;
@@ -28,8 +38,12 @@ export interface AppDependencies {
   lots: LotsService;
   staff: StaffService;
   mail: MailService;
+  ownerAuth: OwnerAuthService;
+  ownerMail: OwnerMailService;
   requireStaffAuth: RequestHandler;
+  requireOwnerAuth: RequestHandler;
   cookie: SessionCookieConfig;
+  ownerCookie: SessionCookieConfig;
   allowedOrigin: string | undefined;
 }
 
@@ -40,6 +54,27 @@ export function createDefaultDependencies(): AppDependencies {
     secureCookies: env.NODE_ENV === 'production',
     sessionTtlMs,
   };
+
+  const ownerSessionTtlMs = env.PUBLIC_SESSION_TTL_MINUTES * MILLISECONDS_PER_MINUTE;
+  const ownerCookie: SessionCookieConfig = {
+    secureCookies: env.NODE_ENV === 'production',
+    sessionTtlMs: ownerSessionTtlMs,
+  };
+
+  const ownerAuth = createOwnerAuthService({
+    lots: lotRepository,
+    sessions: publicSessionsRepository,
+    limiter: createAttemptLimiter({
+      maxAttempts: OWNER_ACCESS_MAX_ATTEMPTS,
+      windowMs: OWNER_ACCESS_WINDOW_MS,
+    }),
+    verifyPin: verifySecret,
+    createToken: createSessionToken,
+    hashToken: hashSessionToken,
+    now: () => new Date(),
+    sessionTtlMs: ownerSessionTtlMs,
+    dummySecretHash: DUMMY_SECRET_HASH,
+  });
 
   const auth = createAuthService({
     staff: staffRepository,
@@ -53,7 +88,7 @@ export function createDefaultDependencies(): AppDependencies {
     hashToken: hashSessionToken,
     now: () => new Date(),
     sessionTtlMs,
-    dummyPasswordHash: DUMMY_PASSWORD_HASH,
+    dummyPasswordHash: DUMMY_SECRET_HASH,
   });
 
   return {
@@ -62,6 +97,7 @@ export function createDefaultDependencies(): AppDependencies {
       lots: lotRepository,
       audit: auditRepository,
       hashPin: hashSecret,
+      ownerSessions: publicSessionsRepository,
     }),
     staff: createStaffService({
       staff: staffRepository,
@@ -75,8 +111,12 @@ export function createDefaultDependencies(): AppDependencies {
       audit: auditRepository,
       now: () => new Date(),
     }),
+    ownerAuth,
+    ownerMail: createOwnerMailService({ mail: mailRepository }),
     requireStaffAuth: createRequireStaffAuth(auth, cookie),
+    requireOwnerAuth: createRequireOwnerAuth(ownerAuth, ownerCookie),
     cookie,
+    ownerCookie,
     allowedOrigin: env.APP_ORIGIN,
   };
 }

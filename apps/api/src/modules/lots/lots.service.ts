@@ -4,6 +4,7 @@ import { AppError } from '../../shared/errors.js';
 import { isDuplicateKeyError } from '../../shared/mongo-errors.js';
 import type { Paginated } from '../../shared/pagination.js';
 import type { AuditRepository } from '../audit/audit.repository.js';
+import type { PublicSessionsRepository } from '../public/public-sessions.repository.js';
 import type { LotContact } from './lot.model.js';
 import type { CreateLotInput, LotListQuery, UpdateLotInput } from './lots.validator.js';
 import type { LotRecord, LotRepository } from './lots.repository.js';
@@ -24,6 +25,7 @@ export interface LotsServiceDeps {
   lots: LotRepository;
   audit: AuditRepository;
   hashPin: (pin: string) => Promise<string>;
+  ownerSessions: Pick<PublicSessionsRepository, 'revokeAllForLot'>;
 }
 
 export function toLotDto(record: LotRecord): LotDto {
@@ -110,6 +112,10 @@ export function createLotsService(deps: LotsServiceDeps) {
         throw new AppError(404, 'NOT_FOUND', 'El lote no existe.');
       }
 
+      if (updated.active === false) {
+        await deps.ownerSessions.revokeAllForLot(updated.id);
+      }
+
       await deps.audit.record({
         actorType: 'staff',
         actorId: actor.id,
@@ -132,6 +138,8 @@ export function createLotsService(deps: LotsServiceDeps) {
       if (updated === null) {
         throw new AppError(404, 'NOT_FOUND', 'El lote no existe.');
       }
+
+      await deps.ownerSessions.revokeAllForLot(updated.id);
 
       await deps.audit.record({
         actorType: 'staff',

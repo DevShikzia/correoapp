@@ -14,6 +14,13 @@ export interface LotRecord {
   updatedAt: Date;
 }
 
+export interface LotCredentials {
+  id: string;
+  lotNumber: string;
+  pinHash: string;
+  active: boolean;
+}
+
 export interface CreateLotRecordInput {
   lotNumber: string;
   ownerNames: string[];
@@ -31,6 +38,7 @@ export interface LotRepository {
   create(input: CreateLotRecordInput): Promise<LotRecord>;
   findById(id: string): Promise<LotRecord | null>;
   findByLotNumber(lotNumber: string): Promise<LotRecord | null>;
+  findCredentialsByLotNumber(lotNumber: string): Promise<LotCredentials | null>;
   list(query: LotListQuery): Promise<Paginated<LotRecord>>;
   update(id: string, changes: UpdateLotRecordInput): Promise<LotRecord | null>;
   setPinHash(id: string, pinHash: string): Promise<LotRecord | null>;
@@ -70,6 +78,21 @@ export const lotRepository: LotRepository = {
   async findByLotNumber(lotNumber: string): Promise<LotRecord | null> {
     const doc = await LotModel.findOne({ lotNumber });
     return doc === null ? null : toRecord(doc);
+  },
+
+  async findCredentialsByLotNumber(lotNumber: string): Promise<LotCredentials | null> {
+    const doc = await LotModel.findOne({ lotNumber }).select('+pinHash');
+
+    if (doc === null) {
+      return null;
+    }
+
+    return {
+      id: doc._id.toString(),
+      lotNumber: doc.lotNumber,
+      pinHash: doc.pinHash,
+      active: doc.active,
+    };
   },
 
   async list({ page, limit, search }: LotListQuery): Promise<Paginated<LotRecord>> {

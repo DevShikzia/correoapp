@@ -9,6 +9,7 @@ import { noStore } from './middleware/no-store.js';
 import { createAuthRouter } from './modules/auth/auth.routes.js';
 import { createLotsRouter } from './modules/lots/lots.routes.js';
 import { createMailRouter } from './modules/mail/mail.routes.js';
+import { createPublicRouter } from './modules/public/public.routes.js';
 import { createStaffRouter } from './modules/staff/staff.routes.js';
 import { healthRouter } from './routes/health.routes.js';
 import { createOriginGuard } from './shared/origin-guard.js';
@@ -45,6 +46,15 @@ export function createApp(
       service: dependencies.auth,
       requireAuth: dependencies.requireStaffAuth,
       cookie: dependencies.cookie,
+    }),
+  );
+  app.use(
+    '/api/public',
+    createPublicRouter({
+      auth: dependencies.ownerAuth,
+      mail: dependencies.ownerMail,
+      requireOwnerAuth: dependencies.requireOwnerAuth,
+      cookie: dependencies.ownerCookie,
     }),
   );
   app.use(

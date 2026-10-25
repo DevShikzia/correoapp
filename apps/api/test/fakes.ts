@@ -6,6 +6,7 @@ import type {
 import type { AuditEntryInput, AuditRepository } from '../src/modules/audit/audit.repository.js';
 import type {
   CreateLotRecordInput,
+  LotCredentials,
   LotRecord,
   LotRepository,
   UpdateLotRecordInput,
@@ -16,6 +17,11 @@ import type {
   MailItemRecord,
   MailRepository,
 } from '../src/modules/mail/mail.repository.js';
+import type {
+  CreatePublicSessionInput,
+  PublicSessionRecord,
+  PublicSessionsRepository,
+} from '../src/modules/public/public-sessions.repository.js';
 import type {
   CreateStaffRecordInput,
   StaffRepository,
@@ -87,6 +93,21 @@ export function createLotRepositoryFake(seed: LotRecord[] = []): LotRepositoryFa
 
     async findByLotNumber(lotNumber: string): Promise<LotRecord | null> {
       return [...records.values()].find((record) => record.lotNumber === lotNumber) ?? null;
+    },
+
+    async findCredentialsByLotNumber(lotNumber: string): Promise<LotCredentials | null> {
+      const record = [...records.values()].find((item) => item.lotNumber === lotNumber);
+
+      if (record === undefined) {
+        return null;
+      }
+
+      return {
+        id: record.id,
+        lotNumber: record.lotNumber,
+        pinHash: record.pinHash,
+        active: record.active,
+      };
     },
 
     async list({ page, limit, search }: LotListQuery): Promise<Paginated<LotRecord>> {
@@ -323,6 +344,23 @@ export function createMailRepositoryFake(seed: MailItemRecord[] = []): MailRepos
       };
     },
 
+    async listByLot(
+      lotId: string,
+      page: number,
+      limit: number,
+    ): Promise<Paginated<MailItemRecord>> {
+      const items = [...records.values()]
+        .filter((record) => record.lotId === lotId)
+        .sort((first, second) => second.receivedAt.getTime() - first.receivedAt.getTime());
+
+      return {
+        items: items.slice((page - 1) * limit, page * limit),
+        page,
+        limit,
+        total: items.length,
+      };
+    },
+
     async markDelivered(
       id: string,
       deliveredBy: string,
@@ -348,6 +386,59 @@ export function createMailRepositoryFake(seed: MailItemRecord[] = []): MailRepos
 
       records.set(id, updated);
       return updated;
+    },
+  };
+}
+
+export interface PublicSessionsRepositoryFake extends PublicSessionsRepository {
+  records: Map<string, PublicSessionRecord>;
+}
+
+export function createPublicSessionsRepositoryFake(
+  seed: PublicSessionRecord[] = [],
+): PublicSessionsRepositoryFake {
+  const records = new Map(seed.map((record) => [record.id, record]));
+  let sequence = records.size;
+
+  return {
+    records,
+
+    async create(input: CreatePublicSessionInput): Promise<PublicSessionRecord> {
+      sequence += 1;
+      const record: PublicSessionRecord = {
+        id: `owner-session-${sequence}`,
+        tokenHash: input.tokenHash,
+        lotId: input.lotId,
+        expiresAt: input.expiresAt,
+        createdAt: new Date(),
+      };
+
+      records.set(record.id, record);
+      return record;
+    },
+
+    async findActiveByTokenHash(tokenHash: string, now: Date): Promise<PublicSessionRecord | null> {
+      return (
+        [...records.values()].find(
+          (record) => record.tokenHash === tokenHash && record.expiresAt > now,
+        ) ?? null
+      );
+    },
+
+    async deleteByTokenHash(tokenHash: string): Promise<void> {
+      for (const [id, record] of records) {
+        if (record.tokenHash === tokenHash) {
+          records.delete(id);
+        }
+      }
+    },
+
+    async revokeAllForLot(lotId: string): Promise<void> {
+      for (const [id, record] of records) {
+        if (record.lotId === lotId) {
+          records.delete(id);
+        }
+      }
     },
   };
 }

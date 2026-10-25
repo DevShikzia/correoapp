@@ -8,12 +8,14 @@ Los nombres son una guía; mantener consistencia y documentar cambios. Prefijo `
 - `GET /auth/me`
 
 ## Acceso propietario
-- `POST /public/access` — recibe `lotNumber` + `pin`; devuelve sesión segura.
-- `POST /public/logout`
-- `GET /public/me`
-- `GET /public/mail?page=&limit=`
+- `POST /public/access` — recibe `lotNumber` + `pin`; responde con `lotNumber` y `expiresAt` y crea una sesión `HttpOnly`.
+- `POST /public/logout` — revoca la sesión y borra la cookie.
+- `GET /public/me` — devuelve el `lotNumber` de la sesión.
+- `GET /public/mail?page=&limit=` — correspondencia del lote de la sesión.
 
-Las rutas `/public/*` obtienen el lote de la sesión verificada. Nunca aceptan un `lotId` del cliente para decidir permisos.
+Las rutas `/public/*` obtienen el lote de la sesión verificada. Nunca aceptan un `lotId` del cliente para decidir permisos; cualquier `lotId` o `lotNumber` enviado por el cliente se ignora. Un lote o PIN inválido responde siempre con el mismo error genérico (`401`) para no revelar si el lote existe. Tras 5 intentos fallidos en 15 minutos (por lote y por IP) responde `429`. Cambiar el PIN o desactivar el lote revoca todas sus sesiones.
+
+El portal no devuelve datos internos: solo identificación del envío, descripción, fecha de recepción, estado y fecha de entrega. No expone `lotId`, `receivedBy`, `deliveredBy`, contactos, teléfonos ni hashes.
 
 ## Administración
 - `POST /lots`
@@ -46,6 +48,7 @@ Solo usuarios autorizados pueden usar endpoints internos. Validar transiciones d
 - Índices para `MailItem` por `lotId + receivedAt` y `status + receivedAt`.
 - `MailItem` copia el número de lote al registrar para listar sin joins; el número de lote no se modifica después de crearlo.
 - Índice TTL en `PublicSession.expiresAt`.
+- `PublicSession` guarda solo el hash SHA-256 del token y tiene índice único por `tokenHash`; el token en claro solo viaja en la cookie.
 - Índices de auditoría por `createdAt` y `lotId + createdAt`.
 - No confiar en IDs recibidos: validar formato y autorización.
 - Aplicar paginación y límites máximos.

@@ -1,4 +1,5 @@
 import type { Request } from 'express';
+import type { AuthenticatedOwner } from './authenticated-owner.js';
 import type { AuthenticatedStaff } from './authenticated-staff.js';
 import { AppError } from './errors.js';
 
@@ -8,6 +9,14 @@ export function requireStaff(request: Request): AuthenticatedStaff {
   }
 
   return request.staff;
+}
+
+export function requireOwner(request: Request): AuthenticatedOwner {
+  if (request.owner === undefined) {
+    throw new AppError(401, 'UNAUTHORIZED', 'Sesión requerida.');
+  }
+
+  return request.owner;
 }
 
 export function getRequestId(request: Request): string | undefined {

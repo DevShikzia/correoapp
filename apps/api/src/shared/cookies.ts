@@ -1,6 +1,7 @@
 import type { Request } from 'express';
 
 export const STAFF_SESSION_COOKIE = 'staff_session';
+export const OWNER_SESSION_COOKIE = 'owner_session';
 
 export interface SessionCookieOptions {
   httpOnly: true;

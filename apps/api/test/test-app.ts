@@ -6,13 +6,22 @@ import { createAuthService } from '../src/modules/auth/auth.service.js';
 import { createAttemptLimiter } from '../src/modules/auth/login-rate-limit.js';
 import { createLotsService } from '../src/modules/lots/lots.service.js';
 import type { LotRecord } from '../src/modules/lots/lots.repository.js';
+import type { MailItemRecord } from '../src/modules/mail/mail.repository.js';
 import { createMailService } from '../src/modules/mail/mail.service.js';
+import { createRequireOwnerAuth } from '../src/modules/public/owner-auth.middleware.js';
+import { createOwnerAuthService } from '../src/modules/public/owner-auth.service.js';
+import { createOwnerMailService } from '../src/modules/public/owner-mail.service.js';
+import {
+  OWNER_ACCESS_MAX_ATTEMPTS,
+  OWNER_ACCESS_WINDOW_MS,
+} from '../src/modules/public/public.constants.js';
 import type { StaffUserRecord } from '../src/modules/staff/staff.repository.js';
 import { createStaffService } from '../src/modules/staff/staff.service.js';
 import {
   createAuditRepositoryFake,
   createLotRepositoryFake,
   createMailRepositoryFake,
+  createPublicSessionsRepositoryFake,
   createStaffRepositoryFake,
   createStaffSessionsRepositoryFake,
 } from './fakes.js';
@@ -20,8 +29,11 @@ import {
 export const ADMIN_PASSWORD = 'contrasena-admin-123';
 export const GUARD_PASSWORD = 'contrasena-guard-123';
 export const ADMIN_ORIGIN = 'http://localhost:4200';
+export const OWNER_PIN = '1234';
 
 const FIXED_NOW = new Date('2026-03-01T12:00:00.000Z');
+const MILLISECONDS_PER_MINUTE = 60 * 1000;
+const OWNER_SESSION_TTL_MS = 30 * MILLISECONDS_PER_MINUTE;
 
 export const adminRecord: StaffUserRecord = {
   id: 'staff-admin',
@@ -49,31 +61,41 @@ export const inactiveRecord: StaffUserRecord = {
   active: false,
 };
 
-const activeLot: LotRecord = {
+export const activeLot: LotRecord = {
   id: 'lot-42',
   lotNumber: '42',
   ownerNames: ['Ana Pérez'],
   contacts: [{ name: 'Ana Pérez', phone: '+5491122334455' }],
-  pinHash: 'pin-hash',
+  pinHash: `hash:${OWNER_PIN}`,
   active: true,
   createdAt: FIXED_NOW,
   updatedAt: FIXED_NOW,
 };
 
-const inactiveLot: LotRecord = {
+export const inactiveLot: LotRecord = {
   ...activeLot,
   id: 'lot-43',
   lotNumber: '43',
   active: false,
 };
 
-export function buildTestApp(options: { allowedOrigin?: string } = {}) {
+export interface TestAppOptions {
+  allowedOrigin?: string;
+  now?: Date;
+  lots?: LotRecord[];
+  mail?: MailItemRecord[];
+}
+
+export function buildTestApp(options: TestAppOptions = {}) {
+  const now = options.now ?? FIXED_NOW;
   const staff = createStaffRepositoryFake([adminRecord, guardRecord, inactiveRecord]);
   const sessions = createStaffSessionsRepositoryFake();
   const audit = createAuditRepositoryFake();
-  const lots = createLotRepositoryFake([activeLot, inactiveLot]);
-  const mail = createMailRepositoryFake();
+  const lots = createLotRepositoryFake(options.lots ?? [activeLot, inactiveLot]);
+  const mail = createMailRepositoryFake(options.mail ?? []);
+  const ownerSessions = createPublicSessionsRepositoryFake();
   const cookie = { secureCookies: false, sessionTtlMs: 60_000 };
+  const ownerCookie = { secureCookies: false, sessionTtlMs: OWNER_SESSION_TTL_MS };
 
   const auth = createAuthService({
     staff,
@@ -92,12 +114,29 @@ export function buildTestApp(options: { allowedOrigin?: string } = {}) {
     dummyPasswordHash: 'hash:contrasena-inexistente',
   });
 
+  const ownerAuth = createOwnerAuthService({
+    lots,
+    sessions: ownerSessions,
+    limiter: createAttemptLimiter({
+      maxAttempts: OWNER_ACCESS_MAX_ATTEMPTS,
+      windowMs: OWNER_ACCESS_WINDOW_MS,
+      now: () => now,
+    }),
+    verifyPin: (pinHash, pin) => Promise.resolve(pinHash === `hash:${pin}`),
+    createToken: () => `owner-token-${ownerSessions.records.size + 1}-${Math.random()}`,
+    hashToken: (token) => `sha256:${token}`,
+    now: () => now,
+    sessionTtlMs: ownerCookie.sessionTtlMs,
+    dummySecretHash: 'hash:pin-inexistente',
+  });
+
   const dependencies: AppDependencies = {
     auth,
     lots: createLotsService({
       lots,
       audit,
-      hashPin: (pin) => Promise.resolve(`pin:${pin}`),
+      hashPin: (pin) => Promise.resolve(`hash:${pin}`),
+      ownerSessions,
     }),
     staff: createStaffService({
       staff,
@@ -109,12 +148,26 @@ export function buildTestApp(options: { allowedOrigin?: string } = {}) {
       mail,
       lots,
       audit,
-      now: () => FIXED_NOW,
+      now: () => now,
     }),
+    ownerAuth,
+    ownerMail: createOwnerMailService({ mail }),
     requireStaffAuth: createRequireStaffAuth(auth, cookie),
+    requireOwnerAuth: createRequireOwnerAuth(ownerAuth, ownerCookie),
     cookie,
+    ownerCookie,
     allowedOrigin: options.allowedOrigin,
   };
 
-  return { app: createApp(dependencies), staff, sessions, lots, mail, audit };
+  return {
+    app: createApp(dependencies),
+    staff,
+    sessions,
+    lots,
+    mail,
+    audit,
+    ownerAuth,
+    ownerSessions,
+    ownerCookie,
+  };
 }

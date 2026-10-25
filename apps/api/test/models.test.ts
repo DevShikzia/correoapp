@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { AuditLogModel } from '../src/modules/audit/audit-log.model.js';
 import { LotModel } from '../src/modules/lots/lot.model.js';
 import { MailItemModel } from '../src/modules/mail/mail-item.model.js';
+import { PublicSessionModel } from '../src/modules/public/public-session.model.js';
 import { StaffUserModel } from '../src/modules/staff/staff-user.model.js';
 
 function indexKeys(indexes: ReturnType<Schema['indexes']>): string[] {
@@ -34,6 +35,18 @@ describe('índices de los modelos', () => {
     expect(indexKeys(AuditLogModel.schema.indexes())).toEqual(
       expect.arrayContaining(['createdAt', 'lotId,createdAt']),
     );
+  });
+
+  it('PublicSession tiene token único y TTL por vencimiento', () => {
+    const tokenIndex = PublicSessionModel.schema
+      .indexes()
+      .find(([fields]) => 'tokenHash' in fields);
+
+    expect(tokenIndex?.[1]).toMatchObject({ unique: true });
+
+    const ttlIndex = PublicSessionModel.schema.indexes().find(([fields]) => 'expiresAt' in fields);
+
+    expect(ttlIndex?.[1]).toMatchObject({ expireAfterSeconds: 0 });
   });
 });
 

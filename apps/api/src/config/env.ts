@@ -4,6 +4,7 @@ const LOG_LEVELS = ['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'
 
 const MAX_SESSION_TTL_MINUTES = 7 * 24 * 60;
 const SESSION_TTL_MINUTES_DEFAULT = 8 * 60;
+const PUBLIC_SESSION_TTL_MINUTES_DEFAULT = 30;
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -17,6 +18,12 @@ const envSchema = z.object({
     .min(5)
     .max(MAX_SESSION_TTL_MINUTES)
     .default(SESSION_TTL_MINUTES_DEFAULT),
+  PUBLIC_SESSION_TTL_MINUTES: z.coerce
+    .number()
+    .int()
+    .min(5)
+    .max(MAX_SESSION_TTL_MINUTES)
+    .default(PUBLIC_SESSION_TTL_MINUTES_DEFAULT),
   APP_ORIGIN: z.url().optional(),
 });
 
