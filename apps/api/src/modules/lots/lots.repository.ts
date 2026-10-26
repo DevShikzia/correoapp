@@ -121,7 +121,7 @@ export const lotRepository: LotRepository = {
     const doc = await LotModel.findByIdAndUpdate(
       id,
       { $set: changes },
-      { new: true, runValidators: true },
+      { returnDocument: 'after', runValidators: true },
     );
     return doc === null ? null : toRecord(doc);
   },
@@ -133,7 +133,7 @@ export const lotRepository: LotRepository = {
     const doc = await LotModel.findByIdAndUpdate(
       id,
       { $set: { pinHash } },
-      { new: true, runValidators: true },
+      { returnDocument: 'after', runValidators: true },
     );
     return doc === null ? null : toRecord(doc);
   },

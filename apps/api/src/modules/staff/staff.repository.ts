@@ -88,7 +88,7 @@ export const staffRepository: StaffRepository = {
     const doc = await StaffUserModel.findByIdAndUpdate(
       id,
       { $set: changes },
-      { new: true, runValidators: true },
+      { returnDocument: 'after', runValidators: true },
     );
     return doc === null ? null : toRecord(doc);
   },

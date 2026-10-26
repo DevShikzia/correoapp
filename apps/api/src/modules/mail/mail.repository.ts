@@ -126,7 +126,7 @@ export const mailRepository: MailRepository = {
           deliveredBy: new Types.ObjectId(deliveredBy),
         },
       },
-      { new: true, runValidators: true },
+      { returnDocument: 'after', runValidators: true },
     );
 
     return doc === null ? null : toRecord(doc);

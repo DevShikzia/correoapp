@@ -92,7 +92,7 @@ export const notificationRepository: NotificationRepository = {
               phone: input.phone,
             },
           },
-          { new: true, upsert: true, setDefaultsOnInsert: true },
+          { returnDocument: 'after', upsert: true, setDefaultsOnInsert: true },
         );
 
         if (doc !== null) {
@@ -143,7 +143,7 @@ export const notificationRepository: NotificationRepository = {
     const doc = await NotificationJobModel.findOneAndUpdate(
       { _id: id },
       { $set: { status: 'sending', attempts: attempt } },
-      { new: true, runValidators: true },
+      { returnDocument: 'after', runValidators: true },
     );
 
     return doc === null ? null : toRecord(doc);
