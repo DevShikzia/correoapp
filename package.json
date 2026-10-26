@@ -18,7 +18,8 @@
     "dev:api": "pnpm --filter @correspondencia/api dev",
     "dev:web": "pnpm --filter @correspondencia/web start",
     "dev:worker": "pnpm --filter @correspondencia/worker dev",
-    "smoke:http": "node scripts/smoke-http.mjs"
+    "smoke:http": "node scripts/smoke-http.mjs",
+    "smoke:notifications": "pnpm --filter @correspondencia/api smoke:notifications"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

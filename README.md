@@ -88,6 +88,22 @@ El script `scripts/smoke-http.mjs` verifica cookies, permisos, aislamiento entre
 revocación de sesiones, rate limit y CSRF. No borra datos: usalo solo contra una base
 recién creada, nunca contra datos reales. Ver `docs/08-estado-y-continuacion.md`.
 
+Prueba de humo del flujo de notificaciones (requiere API, worker y Redis reales):
+
+```bash
+SMOKE_MONGODB_URI='mongodb://127.0.0.1:27017/correspondencia_e2e' \
+SMOKE_ADMIN_USERNAME=admin.e2e \
+SMOKE_ADMIN_PASSWORD='contraseña-de-al-menos-12' \
+  pnpm smoke:notifications
+```
+
+El script `apps/api/scripts/smoke-notifications.mjs` registra una correspondencia,
+espera al worker y verifica que el aviso quede `sent` con el lote y el teléfono
+correctos, sin descripción. Exige que la base contenga `_e2e` en el nombre y la
+elimina al terminar (`SMOKE_KEEP_DATA=true` la conserva). La API y el worker deben
+correr con `NOTIFICATIONS_ENABLED=true` y `WHATSAPP_PROVIDER=console`; los puertos y
+el origen se ajustan con `SMOKE_BASE_URL`, `SMOKE_ORIGIN` y `APP_ORIGIN`.
+
 ## Estructura
 ```text
 apps/api/     Express + TypeScript; configuración validada, logger con redacción y /api/health

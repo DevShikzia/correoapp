@@ -12,7 +12,8 @@
 Estado al **25/10/2026**: los casos marcados se verificaron con tests automatizados y/o
 el smoke HTTP (`pnpm smoke:http`), tanto contra MongoDB nativo como contra el MongoDB
 de Compose. La Fase 6 agrega **11 tests del worker** y **4 tests web** nuevos (34 en
-total) sobre los 149 de la API.
+total) sobre los 149 de la API. El flujo de notificaciones también se validó de punta
+a punta con Redis real y el proveedor `console` (`pnpm smoke:notifications`, 16/16).
 
 - [x] Login correcto e incorrecto de vigilador.
 - [x] Vigilador desactivado no puede seguir usando sesión.

@@ -10,6 +10,7 @@
     "start": "node --env-file-if-exists=../../.env dist/server.js",
     "bootstrap:admin": "tsx --env-file-if-exists=../../.env src/scripts/bootstrap-admin.ts",
     "sync:indexes": "tsx --env-file-if-exists=../../.env src/scripts/sync-indexes.ts",
+    "smoke:notifications": "node scripts/smoke-notifications.mjs",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest"

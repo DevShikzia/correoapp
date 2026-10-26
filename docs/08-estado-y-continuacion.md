@@ -234,11 +234,16 @@ puerto en la configuración base (loopback solo en el override de desarrollo).
 Pruebas: **14 tests nuevos en la API** (servicio de notificaciones, webhook, mail y
 modelo) y **11 del worker** (procesador y proveedor Meta).
 
+Validación end-to-end del **25/10/2026**: con el Redis de Compose levantado, la API y el
+worker corriendo con `WHATSAPP_PROVIDER=console` y una base descartable,
+`pnpm smoke:notifications` verificó **16/16**: la correspondencia se guarda, se crea un
+único aviso, el worker lo envía al primer intento y queda `sent` con el lote, el teléfono
+y la fecha. El aviso no contiene la descripción. Los logs de la API y del worker no
+mostraron teléfonos, PIN, cookies ni credenciales.
+
 Pendiente de la Fase 6:
 
 - Probar con credenciales y plantilla reales de Meta: no hay secretos disponibles.
-- Levantar el Redis de Compose y correr un envío end-to-end con el proveedor `console`;
-  hoy se validó `docker compose config` y los tests usan fakes.
 - Endpoint `POST /notifications/:id/retry` para administradores (previsto para Fase 7).
 - Configurar el webhook público con HTTPS y validarlo desde Meta.
 
@@ -301,9 +306,9 @@ El **25/10/2026** el portal dejó de compartir la interfaz interna:
 - Falta una pasada manual en navegador por `/staff`, `/admin` y el rediseño del portal
   con datos reales de prueba; la cobertura actual es de tests de componentes.
 - El proveedor `meta` no se probó contra la API real: faltan credenciales y una plantilla
-  aprobada. El proveedor `console` tampoco se probó todavía contra un Redis real.
-- Composer/Redis de Compose se validó con `docker compose config`; falta levantar Redis y
-  confirmar un envío end-to-end (encolado → worker → estado `sent`).
+  aprobada. El proveedor `console` sí se validó contra un Redis real.
+- El Redis de Compose se levantó y el flujo encolado → worker → `sent` quedó validado con
+  `pnpm smoke:notifications` (16/16); la base descartable se eliminó después.
 - La cola no tiene una tarea de reconciliación para avisos `pending` que quedaron sin
   encolar por una caída de Redis.
 - El endpoint de reintento manual para administradores sigue pendiente.
@@ -315,10 +320,9 @@ El **25/10/2026** el portal dejó de compartir la interfaz interna:
 
 ## Próximos pasos sugeridos
 
-1. Levantar Redis de Compose y correr un envío end-to-end con `WHATSAPP_PROVIDER=console`.
-2. Fase 7: endurecimiento, rate limit compartido, reintento manual, backups y restauración.
+1. Fase 7: endurecimiento, rate limit compartido, reintento manual, backups y restauración.
+2. Configurar Meta y validar la plantilla real antes de habilitar WhatsApp en producción.
 3. Fase 8: despliegue en Ubuntu Server con Nginx, Cloudflare Tunnel y HTTPS.
-4. Configurar Meta y validar la plantilla real antes de habilitar WhatsApp en producción.
 
 ## Checklist para retomar
 
@@ -339,6 +343,6 @@ El **25/10/2026** el portal dejó de compartir la interfaz interna:
 - [x] Fase 6 implementada: cola BullMQ, worker, reintentos, idempotencia y webhook.
 - [x] Redis agregado a Compose y `.env.example` actualizado.
 - [x] `docker compose config` válido con `mongo` y `redis`.
-- [ ] Levantar Redis y probar un envío end-to-end con el proveedor `console`.
+- [x] Redis levantado y envío end-to-end con el proveedor `console` (16/16).
 - [ ] Probar el proveedor `meta` con credenciales y plantilla reales.
 - [ ] Pasada manual en navegador de `/portal`, `/staff` y `/admin`.
