@@ -26,10 +26,13 @@ export function createApp(
 
   app.disable('x-powered-by');
 
-  if (env.NODE_ENV === 'production') {
+  const trustProxyHops =
+    env.TRUST_PROXY ?? (env.NODE_ENV === 'production' ? TRUSTED_PROXY_HOPS : 0);
+
+  if (trustProxyHops > 0) {
     // Detrás de Nginx: sin esto `request.ip` sería la IP del proxy y el rate limit
     // por cliente agruparía a todos los usuarios.
-    app.set('trust proxy', TRUSTED_PROXY_HOPS);
+    app.set('trust proxy', trustProxyHops);
   }
 
   app.use(helmet());

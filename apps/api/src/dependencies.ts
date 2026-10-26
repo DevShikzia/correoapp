@@ -161,15 +161,20 @@ function createNotificationDependencies(): NotificationDependencies {
 export function createDefaultDependencies(): AppDependencies {
   const sessionTtlMs = env.STAFF_SESSION_TTL_MINUTES * MILLISECONDS_PER_MINUTE;
   const limiters = createRateLimiters();
+  const secureCookies = env.COOKIE_SECURE ?? env.NODE_ENV === 'production';
+
+  if (env.NODE_ENV === 'production' && !secureCookies) {
+    logger.warn('COOKIE_SECURE=false en producción: usalo solo para pruebas HTTP en la red local');
+  }
 
   const cookie: SessionCookieConfig = {
-    secureCookies: env.NODE_ENV === 'production',
+    secureCookies,
     sessionTtlMs,
   };
 
   const ownerSessionTtlMs = env.PUBLIC_SESSION_TTL_MINUTES * MILLISECONDS_PER_MINUTE;
   const ownerCookie: SessionCookieConfig = {
-    secureCookies: env.NODE_ENV === 'production',
+    secureCookies,
     sessionTtlMs: ownerSessionTtlMs,
   };
 

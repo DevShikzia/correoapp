@@ -40,5 +40,15 @@ export default tseslint.config(
       },
     },
   },
+  {
+    // Script de inicialización de MongoDB: se ejecuta con mongosh.
+    files: ['infra/mongo/**/*.js'],
+    languageOptions: {
+      globals: {
+        db: 'readonly',
+        process: 'readonly',
+      },
+    },
+  },
   prettier,
 );

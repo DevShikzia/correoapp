@@ -1,0 +1,171 @@
+name: correspondencia
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: '10m'
+    max-file: '3'
+
+services:
+  mongo:
+    image: mongo:8.0
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:?falta MONGO_ROOT_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?falta MONGO_ROOT_PASSWORD}
+      MONGO_INITDB_DATABASE: ${MONGO_DATABASE:-correspondencia}
+      MONGO_DATABASE: ${MONGO_DATABASE:-correspondencia}
+      MONGO_APP_USER: ${MONGO_APP_USER:?falta MONGO_APP_USER}
+      MONGO_APP_PASSWORD: ${MONGO_APP_PASSWORD:?falta MONGO_APP_PASSWORD}
+    # Sin `ports:`: solo alcanzable desde la red interna de Compose.
+    command: ['mongod', '--wiredTigerCacheSizeGB', '0.5']
+    volumes:
+      - mongo-data:/data/db
+      - ../mongo/init-app-user.js:/docker-entrypoint-initdb.d/init-app-user.js:ro
+    networks:
+      - backend
+    logging: *default-logging
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'mongosh --quiet --username "$$MONGO_INITDB_ROOT_USERNAME" --password "$$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin --eval "db.adminCommand({ ping: 1 }).ok" | grep -q 1',
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 768m
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    # Sin `ports:`: solo alcanzable desde la red interna de Compose.
+    command:
+      [
+        'redis-server',
+        '--appendonly',
+        'yes',
+        '--appendfsync',
+        'everysec',
+        '--maxmemory',
+        '96mb',
+        '--maxmemory-policy',
+        'noeviction',
+      ]
+    volumes:
+      - redis-data:/data
+    networks:
+      - backend
+    logging: *default-logging
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 160m
+
+  api:
+    build:
+      context: ../..
+      dockerfile: infra/docker/api.Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ../../.env.production
+    environment:
+      PORT: 3000
+      MONGODB_URI: mongodb://${MONGO_APP_USER:?falta MONGO_APP_USER}:${MONGO_APP_PASSWORD:?falta MONGO_APP_PASSWORD}@mongo:27017/${MONGO_DATABASE:-correspondencia}?authSource=${MONGO_DATABASE:-correspondencia}
+      REDIS_URL: redis://redis:6379
+      NODE_OPTIONS: --max-old-space-size=256
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - backend
+      - frontend
+    logging: *default-logging
+    stop_grace_period: 15s
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3000/api/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 384m
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: infra/docker/worker.Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ../../.env.production
+    environment:
+      MONGODB_URI: mongodb://${MONGO_APP_USER:?falta MONGO_APP_USER}:${MONGO_APP_PASSWORD:?falta MONGO_APP_PASSWORD}@mongo:27017/${MONGO_DATABASE:-correspondencia}?authSource=${MONGO_DATABASE:-correspondencia}
+      REDIS_URL: redis://redis:6379
+      NODE_OPTIONS: --max-old-space-size=192
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - backend
+    logging: *default-logging
+    stop_grace_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 320m
+
+  web:
+    build:
+      context: ../..
+      dockerfile: infra/docker/web.Dockerfile
+    restart: unless-stopped
+    ports:
+      - '${WEB_PORT:-8080}:80'
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - frontend
+    logging: *default-logging
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1/ >/dev/null || exit 1']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 96m
+
+volumes:
+  mongo-data:
+  redis-data:
+
+networks:
+  backend:
+    driver: bridge
+  frontend:
+    driver: bridge

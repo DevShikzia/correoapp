@@ -31,6 +31,15 @@ const envSchema = z.object({
     .max(MAX_SESSION_TTL_MINUTES)
     .default(PUBLIC_SESSION_TTL_MINUTES_DEFAULT),
   APP_ORIGIN: z.url().optional(),
+  // Cookies `Secure` por defecto en producción. Se puede desactivar solo para
+  // una prueba HTTP en red local mientras no haya HTTPS.
+  COOKIE_SECURE: z
+    .enum(BOOLEAN_VALUES)
+    .transform((value) => value === 'true')
+    .optional(),
+  // Cantidad de proxies de confianza para leer X-Forwarded-For. Por defecto 1
+  // en producción (Nginx) y 0 en desarrollo.
+  TRUST_PROXY: z.coerce.number().int().min(0).max(5).optional(),
   NOTIFICATIONS_ENABLED: z
     .enum(BOOLEAN_VALUES)
     .default('false')

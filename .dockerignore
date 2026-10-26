@@ -1,0 +1,17 @@
+# Contexto de build: la raíz del repositorio.
+# Evita copiar dependencias locales (con binarios de otra plataforma) y secretos.
+**/node_modules
+**/dist
+**/.angular
+**/coverage
+**/*.tsbuildinfo
+**/test
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+*.log
+logs
+backups
+dumps
