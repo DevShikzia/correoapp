@@ -10,7 +10,7 @@
 ## Autenticación
 - Hash de contraseñas y PIN con Argon2id o alternativa mantenida.
 - Nunca almacenar ni registrar PIN/contraseñas en texto plano.
-- Rate limit por IP y por lote/usuario; enfriamiento gradual ante fallos.
+- Rate limit por IP y por lote/usuario, compartido entre instancias mediante Redis cuando `REDIS_URL` está configurada; enfriamiento gradual ante fallos. Si Redis no responde, se aplica un límite local para no bloquear el acceso.
 - Mensajes de acceso genéricos para no confirmar si un lote existe.
 - Sesiones temporales, revocables y con expiración.
 - Cookies: `HttpOnly`, `Secure` en producción, `SameSite`; protección CSRF para acciones mutables cuando se use autenticación por cookie.

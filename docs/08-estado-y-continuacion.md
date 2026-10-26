@@ -1,8 +1,9 @@
 # 8. Estado actual y continuación
 
 Registro de estado al **26/10/2026**. El código incluye las fases 0 a 6, el rediseño
-del portal de propietarios y la Fase 7A (reintento y reconciliación de avisos). Los
-últimos commits están en `main`; este documento se actualiza junto con cada fase.
+del portal de propietarios, la Fase 7A (reintento y reconciliación de avisos) y la
+Fase 7B (rate limit compartido en Redis). Los últimos commits están en `main`; este
+documento se actualiza junto con cada fase.
 
 Este documento resume lo hecho, lo verificado, lo que falta y los pasos exactos para
 retomar después de reiniciar Windows. No contiene contraseñas ni secretos: los valores
@@ -10,7 +11,7 @@ locales viven en `.env`, que está ignorado por Git.
 
 ## Resumen funcional
 
-- Fases 0 a 6 y Fase 7A del plan implementadas.
+- Fases 0 a 6, 7A y 7B del plan implementadas.
 - API Express + TypeScript con autenticación de staff, lotes, vigiladores,
   correspondencia, auditoría y portal de propietarios.
 - Portal Angular `/portal` con lote + PIN, listado paginado, estados y logout.
@@ -22,7 +23,7 @@ locales viven en `.env`, que está ignorado por Git.
   limitados, idempotencia, webhook autenticado, reintento manual y reconciliación de
   avisos `pending`. Apagadas por defecto.
 - PWA con service worker; `/api` queda fuera de caché (`dataGroups: []`).
-- Tests actuales: **175 API + 19 worker + 34 web**, con lint, typecheck, build y formato
+- Tests actuales: **184 API + 19 worker + 34 web**, con lint, typecheck, build y formato
   en verde.
 - **Docker Compose validado** con `docker compose config`: MongoDB `mongo:8.0` y Redis
   `redis:7.4-alpine`, ambos en red interna y publicados solo en loopback en desarrollo.
@@ -47,7 +48,7 @@ Resultado: **64/64 verificaciones OK**.
 | Privacidad | DTO sin `lotId`, `receivedBy`, `deliveredBy`, contactos, teléfonos ni hashes |
 | Caché | `Cache-Control: no-store` en `/api` |
 | Sesiones | Logout invalida la cookie; reset de PIN y desactivación revocan sesiones |
-| Rate limit | 5 fallos de PIN y el siguiente intento responde 429 |
+| Rate limit | 5 fallos de PIN y el siguiente intento responde 429; el bloqueo compartido entre instancias se validó aparte |
 | CSRF | `Origin` distinto de `APP_ORIGIN` responde 403 |
 | Frontend | `/portal` responde 200 y el proxy `/api` llega a la API real |
 
@@ -279,6 +280,32 @@ Validación real del **26/10/2026**:
   primer intento (`requeued: 1`) mientras uno recién creado siguió `pending`.
 - Sin teléfonos ni credenciales en los logs y sin bases `*e2e*` residuales.
 
+## Fase 7B — Rate limit compartido
+
+Implementada el **26/10/2026**:
+
+1. `AttemptLimiter` pasó a ser asíncrono y tiene dos implementaciones: memoria local y
+   Redis.
+2. Con `REDIS_URL` configurada, staff y propietarios comparten los contadores entre
+   instancias con los prefijos `ratelimit:staff:` y `ratelimit:owner:`.
+3. El incremento usa un script Lua con `INCR` + `PEXPIRE` en el primer fallo: la ventana
+   de 15 minutos no queda abierta si el proceso cae entre ambas operaciones.
+4. Las claves separan usuario/lote e IP. No contienen contraseñas, PIN ni tokens.
+5. Si Redis no está listo o una operación falla, se usa el limitador local, se avisa una
+   sola vez en el log y el login sigue disponible. El respaldo recibe los mismos fallos y
+   se limpia al reiniciar, para que una caída breve no habilite intentos extra.
+6. Sin `REDIS_URL` (desarrollo o una sola instancia) se usa memoria local; en producción
+   se registra una advertencia al arrancar.
+
+Validación real del **26/10/2026**:
+
+- Dos instancias de la API contra el mismo Redis y una base descartable: 3 fallos en una
+  instancia y 2 en la otra produjeron **429** en ambas (**19/19** verificaciones).
+- El contador del usuario llegó a 5 y conservó su TTL de 15 minutos.
+- Una tercera instancia con Redis inaccesible permitió el login correcto y bloqueó al
+  sexto intento con el límite local.
+- Sin contraseñas en los logs; las claves de Redis no incluyen secretos.
+
 ## Portal de propietarios separado y rediseñado
 
 El **25/10/2026** el portal dejó de compartir la interfaz interna:
@@ -313,7 +340,9 @@ El **25/10/2026** el portal dejó de compartir la interfaz interna:
   ese lote.
 - Las cookies son `HttpOnly`, `SameSite=Strict`, `Path=/` y `Secure` solo en
   producción.
-- El rate limit es por lote y por IP, en memoria, con 5 intentos por 15 minutos.
+- El rate limit es por lote/usuario y por IP, con 5 intentos por 15 minutos. Con
+  `REDIS_URL` se comparte vía Redis; sin ella queda en memoria local. Si Redis falla, se
+  usa el respaldo local y se avisa una vez en el log.
 - La PWA no cachea respuestas de `/api` y el portal no usa `localStorage` ni
   `sessionStorage` para datos privados.
 - El formato de fechas del portal usa `Intl.DateTimeFormat('es-AR')`.
@@ -335,8 +364,9 @@ El **25/10/2026** el portal dejó de compartir la interfaz interna:
 
 ## Riesgos y deuda pendiente
 
-- El rate limit en memoria se reinicia con la API y una IP compartida (por ejemplo,
-  una red doméstica con NAT) puede bloquear a varios propietarios durante 15 minutos.
+- Si `REDIS_URL` no está configurada, el rate limit sigue siendo local y no coordina
+  réplicas; en producción conviene definirla. Con Redis caído el respaldo local protege
+  por instancia, pero no coordina el bloqueo entre réplicas mientras dure la caída.
 - El MongoDB de Compose y el nativo conviven solo porque usan puertos distintos
   (`27018` y `27017`). Si se cambia `MONGO_HOST_PORT`, revisar el `.env` y la URI.
 - Falta una pasada manual en navegador por `/staff`, `/admin` y el rediseño del portal
@@ -356,10 +386,9 @@ El **25/10/2026** el portal dejó de compartir la interfaz interna:
 
 ## Próximos pasos sugeridos
 
-1. Fase 7B: rate limit compartido en Redis para staff y propietarios.
-2. Fase 7C: backups cifrados, copia fuera del equipo y prueba de restauración.
-3. Configurar Meta y validar la plantilla real antes de habilitar WhatsApp en producción.
-4. Fase 8: despliegue en Ubuntu Server con Nginx, Cloudflare Tunnel y HTTPS.
+1. Fase 7C: backups cifrados, copia fuera del equipo y prueba de restauración.
+2. Fase 7D: credenciales de Meta, plantilla real y webhook público con HTTPS.
+3. Fase 8: despliegue en Ubuntu Server con Nginx, Cloudflare Tunnel y HTTPS.
 
 ## Checklist para retomar
 
@@ -383,5 +412,7 @@ El **25/10/2026** el portal dejó de compartir la interfaz interna:
 - [x] Redis levantado y envío end-to-end con el proveedor `console` (16/16).
 - [x] Fase 7A implementada: reintento manual, listado de avisos y reconciliación.
 - [x] Reintento y reconciliación validados con Mongo y Redis reales (27/27).
+- [x] Fase 7B implementada: rate limit compartido en Redis con respaldo local.
+- [x] Rate limit validado con dos instancias y con Redis caído (19/19).
 - [ ] Probar el proveedor `meta` con credenciales y plantilla reales.
 - [ ] Pasada manual en navegador de `/portal`, `/staff` y `/admin`.

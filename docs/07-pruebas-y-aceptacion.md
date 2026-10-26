@@ -14,13 +14,16 @@ los smokes HTTP (`pnpm smoke:http` y `pnpm smoke:notifications`), tanto contra M
 nativo como contra el MongoDB y el Redis de Compose. La Fase 6 agrega **11 tests del
 worker** y **4 tests web** nuevos (34 en total) sobre los 149 de la API. La Fase 7A suma
 **26 tests de API** (175) y **8 del worker** (19): reintento manual, listado de avisos y
-reconciliación.
+reconciliación. La Fase 7B suma **9 tests de API** (184) y una prueba real con dos
+instancias de la API compartiendo el bloqueo por Redis.
 
 - [x] Login correcto e incorrecto de vigilador.
 - [x] Vigilador desactivado no puede seguir usando sesión.
 - [x] Solo admin puede crear lotes y usuarios.
 - [x] PIN incorrecto no revela si el lote existe.
 - [x] Demasiados intentos bloquean o ralentizan nuevos intentos.
+- [x] Dos instancias de la API comparten el bloqueo de intentos por Redis.
+- [x] Con Redis caído el login sigue disponible y el límite local también bloquea.
 - [x] Cambiar PIN invalida sesiones previas del lote.
 - [x] Lote A no puede consultar correspondencia de lote B aunque cambie IDs/query params.
 - [x] API nunca devuelve teléfonos ni PIN hash a propietarios.

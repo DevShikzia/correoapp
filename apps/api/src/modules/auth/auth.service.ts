@@ -38,23 +38,27 @@ export function createAuthService(deps: AuthServiceDeps): AuthService {
     return `client:${clientKey}`;
   }
 
-  function registerFailure(username: string, clientKey: string): void {
-    deps.limiter.registerFailure(userKey(username));
-    deps.limiter.registerFailure(clientAttemptKey(clientKey));
+  async function registerFailure(username: string, clientKey: string): Promise<void> {
+    await Promise.all([
+      deps.limiter.registerFailure(userKey(username)),
+      deps.limiter.registerFailure(clientAttemptKey(clientKey)),
+    ]);
   }
 
-  function assertNotBlocked(username: string, clientKey: string): void {
-    if (
-      deps.limiter.isBlocked(userKey(username)) ||
-      deps.limiter.isBlocked(clientAttemptKey(clientKey))
-    ) {
+  async function assertNotBlocked(username: string, clientKey: string): Promise<void> {
+    const [userBlocked, clientBlocked] = await Promise.all([
+      deps.limiter.isBlocked(userKey(username)),
+      deps.limiter.isBlocked(clientAttemptKey(clientKey)),
+    ]);
+
+    if (userBlocked || clientBlocked) {
       throw new AppError(429, 'TOO_MANY_REQUESTS', LOGIN_RATE_LIMIT_MESSAGE);
     }
   }
 
   return {
     async login(username: string, password: string, clientKey: string): Promise<LoginResult> {
-      assertNotBlocked(username, clientKey);
+      await assertNotBlocked(username, clientKey);
 
       const user = await deps.staff.findByUsername(username);
       const passwordMatches = await deps.verifyPassword(
@@ -63,12 +67,14 @@ export function createAuthService(deps: AuthServiceDeps): AuthService {
       );
 
       if (user === null || !passwordMatches || !user.active) {
-        registerFailure(username, clientKey);
+        await registerFailure(username, clientKey);
         throw new AppError(401, 'UNAUTHORIZED', GENERIC_LOGIN_ERROR_MESSAGE);
       }
 
-      deps.limiter.reset(userKey(username));
-      deps.limiter.reset(clientAttemptKey(clientKey));
+      await Promise.all([
+        deps.limiter.reset(userKey(username)),
+        deps.limiter.reset(clientAttemptKey(clientKey)),
+      ]);
 
       await deps.staff.touchLastLogin(user.id);
 

@@ -113,19 +113,19 @@ infra/        Compose (MongoDB y Redis) y, más adelante, Nginx y scripts
 docs/         alcance, plan, estándares, seguridad, API, despliegue y pruebas
 ```
 
-Estado actual: Fases 0 a 6 y la Fase 7A implementadas. La API expone `/api/health`, `/api/auth` (login, logout, sesión actual), `/api/lots` y `/api/staff` (solo administradores), `/api/mail` (cualquier vigilador autenticado): alta, pendientes, detalle y entrega, `/api/notifications` (solo administradores): listado de avisos y reintento, `/api/public` (lote + PIN): acceso, logout, sesión actual y consulta de la correspondencia del propio lote, y `/api/webhooks/whatsapp` para los estados del proveedor.
+Estado actual: Fases 0 a 6, 7A y 7B implementadas. La API expone `/api/health`, `/api/auth` (login, logout, sesión actual), `/api/lots` y `/api/staff` (solo administradores), `/api/mail` (cualquier vigilador autenticado): alta, pendientes, detalle y entrega, `/api/notifications` (solo administradores): listado de avisos y reintento, `/api/public` (lote + PIN): acceso, logout, sesión actual y consulta de la correspondencia del propio lote, y `/api/webhooks/whatsapp` para los estados del proveedor.
 
 - `/portal`: vista pública e independiente para el propietario. Ingresa con lote + PIN, consulta su correspondencia y cierra sesión. No muestra enlaces a Vigilancia ni Administración.
 - `/staff`: login de vigilancia, alta de correspondencia, pendientes paginados y entrega con confirmación.
 - `/admin`: solo administradores; alta y edición de lotes, contactos, PIN, activación/desactivación y gestión de vigiladores.
 
-Tests actuales: **175 API + 19 worker + 34 web**, con lint, typecheck, build y formato en verde.
+Tests actuales: **184 API + 19 worker + 34 web**, con lint, typecheck, build y formato en verde.
 
 Notas de operación:
 - Todos los endpoints internos exigen la cookie de sesión `staff_session` (`HttpOnly`, `SameSite=Strict`, `Secure` en producción).
 - El portal del propietario usa una cookie independiente `owner_session` con las mismas protecciones y expiración corta (`PUBLIC_SESSION_TTL_MINUTES`, por defecto 30).
 - Con `APP_ORIGIN` definido, las peticiones `POST`/`PATCH`/`PUT`/`DELETE` deben enviar ese mismo `Origin` (protección CSRF).
-- El límite de intentos de acceso (staff y propietarios) vive en memoria: es válido para una sola instancia de la API. En la Fase 6/7 se reemplaza por un almacenamiento compartido si se escala horizontalmente.
+- El límite de intentos de acceso (staff y propietarios) se comparte entre instancias cuando `REDIS_URL` está configurada: 5 fallos por usuario/lote e IP en ventanas de 15 minutos. Sin Redis usa memoria local (válido para desarrollo o una sola instancia). Si Redis no responde, cae al límite local y avisa una vez en el log.
 - Ajustar `STAFF_SESSION_TTL_MINUTES` (por defecto 480) según la operación del barrio.
 - Al registrar correspondencia se envía el número de lote; la API valida que exista y esté activo. Los pendientes se listan del más antiguo al más nuevo y la entrega es irreversible desde la API (una segunda entrega responde `409`).
 - Cambiar el PIN o desactivar un lote revoca de inmediato todas las sesiones de propietario de ese lote.

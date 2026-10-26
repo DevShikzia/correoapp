@@ -8,6 +8,8 @@ import { createRequireStaffAuth } from './modules/auth/auth.middleware.js';
 import { staffSessionsRepository } from './modules/auth/auth-sessions.repository.js';
 import { LOGIN_ATTEMPT_WINDOW_MS, LOGIN_MAX_ATTEMPTS } from './modules/auth/auth.constants.js';
 import { createAttemptLimiter } from './modules/auth/login-rate-limit.js';
+import type { AttemptLimiter } from './modules/auth/login-rate-limit.js';
+import { createRedisAttemptLimiter } from './modules/auth/redis-attempt-limiter.js';
 import { auditRepository } from './modules/audit/audit.repository.js';
 import { lotRepository } from './modules/lots/lots.repository.js';
 import type { LotsService } from './modules/lots/lots.service.js';
@@ -69,6 +71,55 @@ const UNAVAILABLE_QUEUE: NotificationQueue = {
   },
 };
 
+const RATE_LIMIT_KEY_PREFIXES = {
+  staff: 'ratelimit:staff',
+  owner: 'ratelimit:owner',
+} as const;
+
+interface RateLimiters {
+  staff: AttemptLimiter;
+  owner: AttemptLimiter;
+}
+
+/**
+ * Con REDIS_URL configurada, staff y propietarios comparten los contadores entre
+ * instancias. Sin Redis se usa memoria local: sirve para desarrollo o una única
+ * instancia, pero no coordina varias réplicas.
+ */
+function createRateLimiters(): RateLimiters {
+  const staff = { maxAttempts: LOGIN_MAX_ATTEMPTS, windowMs: LOGIN_ATTEMPT_WINDOW_MS };
+  const owner = {
+    maxAttempts: OWNER_ACCESS_MAX_ATTEMPTS,
+    windowMs: OWNER_ACCESS_WINDOW_MS,
+  };
+
+  if (env.REDIS_URL === undefined) {
+    if (env.NODE_ENV === 'production') {
+      logger.warn('rate limit en memoria: no se comparte entre instancias');
+    }
+
+    return {
+      staff: createAttemptLimiter(staff),
+      owner: createAttemptLimiter(owner),
+    };
+  }
+
+  return {
+    staff: createRedisAttemptLimiter({
+      redisUrl: env.REDIS_URL,
+      keyPrefix: RATE_LIMIT_KEY_PREFIXES.staff,
+      logger,
+      ...staff,
+    }),
+    owner: createRedisAttemptLimiter({
+      redisUrl: env.REDIS_URL,
+      keyPrefix: RATE_LIMIT_KEY_PREFIXES.owner,
+      logger,
+      ...owner,
+    }),
+  };
+}
+
 interface NotificationDependencies {
   notifier: MailNotifier;
   admin: NotificationAdminService;
@@ -109,6 +160,7 @@ function createNotificationDependencies(): NotificationDependencies {
 
 export function createDefaultDependencies(): AppDependencies {
   const sessionTtlMs = env.STAFF_SESSION_TTL_MINUTES * MILLISECONDS_PER_MINUTE;
+  const limiters = createRateLimiters();
 
   const cookie: SessionCookieConfig = {
     secureCookies: env.NODE_ENV === 'production',
@@ -124,10 +176,7 @@ export function createDefaultDependencies(): AppDependencies {
   const ownerAuth = createOwnerAuthService({
     lots: lotRepository,
     sessions: publicSessionsRepository,
-    limiter: createAttemptLimiter({
-      maxAttempts: OWNER_ACCESS_MAX_ATTEMPTS,
-      windowMs: OWNER_ACCESS_WINDOW_MS,
-    }),
+    limiter: limiters.owner,
     verifyPin: verifySecret,
     createToken: createSessionToken,
     hashToken: hashSessionToken,
@@ -139,10 +188,7 @@ export function createDefaultDependencies(): AppDependencies {
   const auth = createAuthService({
     staff: staffRepository,
     sessions: staffSessionsRepository,
-    limiter: createAttemptLimiter({
-      maxAttempts: LOGIN_MAX_ATTEMPTS,
-      windowMs: LOGIN_ATTEMPT_WINDOW_MS,
-    }),
+    limiter: limiters.staff,
     verifyPassword: verifySecret,
     createToken: createSessionToken,
     hashToken: hashSessionToken,

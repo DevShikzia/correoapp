@@ -41,16 +41,20 @@ export function createOwnerAuthService(deps: OwnerAuthServiceDeps): OwnerAuthSer
     return `client:${clientAddress}`;
   }
 
-  function registerFailure(lotNumber: string, clientAddress: string): void {
-    deps.limiter.registerFailure(lotKey(lotNumber));
-    deps.limiter.registerFailure(clientAttemptKey(clientAddress));
+  async function registerFailure(lotNumber: string, clientAddress: string): Promise<void> {
+    await Promise.all([
+      deps.limiter.registerFailure(lotKey(lotNumber)),
+      deps.limiter.registerFailure(clientAttemptKey(clientAddress)),
+    ]);
   }
 
-  function assertNotBlocked(lotNumber: string, clientAddress: string): void {
-    if (
-      deps.limiter.isBlocked(lotKey(lotNumber)) ||
-      deps.limiter.isBlocked(clientAttemptKey(clientAddress))
-    ) {
+  async function assertNotBlocked(lotNumber: string, clientAddress: string): Promise<void> {
+    const [lotBlocked, clientBlocked] = await Promise.all([
+      deps.limiter.isBlocked(lotKey(lotNumber)),
+      deps.limiter.isBlocked(clientAttemptKey(clientAddress)),
+    ]);
+
+    if (lotBlocked || clientBlocked) {
       throw new AppError(429, 'TOO_MANY_REQUESTS', OWNER_RATE_LIMIT_MESSAGE);
     }
   }
@@ -61,18 +65,20 @@ export function createOwnerAuthService(deps: OwnerAuthServiceDeps): OwnerAuthSer
       pin: string,
       clientAddress: string,
     ): Promise<OwnerAccessResult> {
-      assertNotBlocked(lotNumber, clientAddress);
+      await assertNotBlocked(lotNumber, clientAddress);
 
       const credentials = await deps.lots.findCredentialsByLotNumber(lotNumber);
       const pinMatches = await deps.verifyPin(credentials?.pinHash ?? deps.dummySecretHash, pin);
 
       if (credentials === null || !pinMatches || !credentials.active) {
-        registerFailure(lotNumber, clientAddress);
+        await registerFailure(lotNumber, clientAddress);
         throw new AppError(401, 'UNAUTHORIZED', OWNER_GENERIC_ERROR_MESSAGE);
       }
 
-      deps.limiter.reset(lotKey(lotNumber));
-      deps.limiter.reset(clientAttemptKey(clientAddress));
+      await Promise.all([
+        deps.limiter.reset(lotKey(lotNumber)),
+        deps.limiter.reset(clientAttemptKey(clientAddress)),
+      ]);
 
       const token = deps.createToken();
       const expiresAt = new Date(deps.now().getTime() + deps.sessionTtlMs);

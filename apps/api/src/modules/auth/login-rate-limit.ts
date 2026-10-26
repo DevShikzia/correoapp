@@ -5,9 +5,9 @@ export interface AttemptLimiterOptions {
 }
 
 export interface AttemptLimiter {
-  isBlocked(key: string): boolean;
-  registerFailure(key: string): void;
-  reset(key: string): void;
+  isBlocked(key: string): Promise<boolean>;
+  registerFailure(key: string): Promise<void>;
+  reset(key: string): Promise<void>;
 }
 
 interface AttemptRecord {
@@ -17,6 +17,10 @@ interface AttemptRecord {
 
 const MAX_TRACKED_KEYS = 1_000;
 
+/**
+ * Limitador local para desarrollo, tests y fallback cuando Redis no responde.
+ * No se comparte entre instancias: cada proceso lleva su propia cuenta.
+ */
 export function createAttemptLimiter({
   maxAttempts,
   windowMs,
@@ -37,7 +41,7 @@ export function createAttemptLimiter({
   }
 
   return {
-    isBlocked(key: string): boolean {
+    async isBlocked(key: string): Promise<boolean> {
       const currentTime = now().getTime();
       const record = attempts.get(key);
 
@@ -49,7 +53,7 @@ export function createAttemptLimiter({
       return record.count >= maxAttempts;
     },
 
-    registerFailure(key: string): void {
+    async registerFailure(key: string): Promise<void> {
       const currentTime = now().getTime();
 
       if (attempts.size >= MAX_TRACKED_KEYS) {
@@ -77,7 +81,7 @@ export function createAttemptLimiter({
       record.count += 1;
     },
 
-    reset(key: string): void {
+    async reset(key: string): Promise<void> {
       attempts.delete(key);
     },
   };
