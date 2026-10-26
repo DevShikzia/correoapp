@@ -113,8 +113,13 @@ function validateNotificationConfig(config: Env): void {
   }
 }
 
-function readEnv(): Env {
-  const result = envSchema.safeParse(process.env);
+export function parseEnv(source: NodeJS.ProcessEnv = process.env): Env {
+  // Una variable vacía equivale a no definida: evita que `VAR=` rompa el arranque
+  // por un `min(1)` y permite que los valores por defecto se apliquen.
+  const definedEntries = Object.entries(source).filter(
+    ([, value]) => value !== undefined && value !== '',
+  );
+  const result = envSchema.safeParse(Object.fromEntries(definedEntries));
 
   if (!result.success) {
     const details = result.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`);
@@ -136,4 +141,4 @@ function readEnv(): Env {
   return result.data;
 }
 
-export const env = readEnv();
+export const env = parseEnv();
