@@ -1,9 +1,10 @@
 # 8. Estado actual y continuación
 
 Registro de estado al **26/10/2026**. El código incluye las fases 0 a 6, el rediseño
-del portal de propietarios, la Fase 7A (reintento y reconciliación de avisos) y la
-Fase 7B (rate limit compartido en Redis). Los últimos commits están en `main`; este
-documento se actualiza junto con cada fase.
+del portal de propietarios, la Fase 7A (reintento y reconciliación de avisos), la
+Fase 7B (rate limit compartido en Redis) y el despliegue LAN de la Fase 8 en la
+notebook. Los últimos commits están en `main`; este documento se actualiza junto con
+cada fase.
 
 Este documento resume lo hecho, lo verificado, lo que falta y los pasos exactos para
 retomar después de reiniciar Windows. No contiene contraseñas ni secretos: los valores
@@ -11,7 +12,7 @@ locales viven en `.env`, que está ignorado por Git.
 
 ## Resumen funcional
 
-- Fases 0 a 6, 7A y 7B del plan implementadas.
+- Fases 0 a 6, 7A y 7B implementadas, y despliegue LAN de la Fase 8 en la notebook.
 - API Express + TypeScript con autenticación de staff, lotes, vigiladores,
   correspondencia, auditoría y portal de propietarios.
 - Portal Angular `/portal` con lote + PIN, listado paginado, estados y logout.
@@ -23,7 +24,7 @@ locales viven en `.env`, que está ignorado por Git.
   limitados, idempotencia, webhook autenticado, reintento manual y reconciliación de
   avisos `pending`. Apagadas por defecto.
 - PWA con service worker; `/api` queda fuera de caché (`dataGroups: []`).
-- Tests actuales: **184 API + 19 worker + 34 web**, con lint, typecheck, build y formato
+- Tests actuales: **188 API + 21 worker + 34 web**, con lint, typecheck, build y formato
   en verde.
 - **Docker Compose validado** con `docker compose config`: MongoDB `mongo:8.0` y Redis
   `redis:7.4-alpine`, ambos en red interna y publicados solo en loopback en desarrollo.
@@ -306,6 +307,39 @@ Validación real del **26/10/2026**:
   sexto intento con el límite local.
 - Sin contraseñas en los logs; las claves de Redis no incluyen secretos.
 
+## Fase 8 — Despliegue en la notebook
+
+Desplegado el **26/10/2026** en la notebook Ubuntu 26.04 (`192.168.0.67`, kernel 7.0):
+
+1. Docker 29.1.3 y Compose 2.40.3 instalados; `shikzia` en el grupo `docker`.
+2. Código en `/home/shikzia/correspondencia`; `.env.production` con permisos `600` y
+   secretos generados en el servidor con `infra/scripts/generate-prod-env.sh`.
+3. `infra/compose/docker-compose.prod.yml` levanta MongoDB, Redis, API, worker y web.
+   Solo la web publica el puerto **8080** en la LAN; MongoDB y Redis no tienen `ports:`.
+4. La app de facturación del puerto 80 y el MongoDB nativo (7.0.32) quedaron intactos.
+   UFW permite 8080 solo desde `192.168.0.0/24`.
+5. `mongo:7.0` está fijado porque 8.0 se niega a arrancar en kernels 6.19+ y 8.2 se
+   reinició con SIGSEGV (139) durante las pruebas. 7.0 es la versión del MongoDB nativo
+   que ya funcionaba.
+6. Se crearon los índices y el administrador inicial (`admin`); la contraseña está en
+   `~/correspondencia/.admin-password` y conviene reemplazarla creando otro
+   administrador desde `/admin`.
+
+Validación real del **26/10/2026**:
+
+- `http://192.168.0.67:8080` responde 200 con el título “Correspondencia”.
+- `/api/health` a través de Nginx responde 200 y `{"status":"ok"}`.
+- Login de `admin` responde 200 y `/api/auth/me` devuelve el rol `admin`.
+- La app existente en `http://192.168.0.67/` sigue respondiendo 200.
+- MongoDB 7.0 se mantuvo estable, sin reinicios, con 83 MB de uso.
+
+Pendiente de esta fase:
+
+- Cloudflare Tunnel y HTTPS; después cambiar `APP_ORIGIN` y `COOKIE_SECURE=true`.
+- Backups y prueba de restauración (Fase 7C).
+- Habilitar WhatsApp con credenciales y plantilla reales.
+- La PWA no se instala ni cachea offline por HTTP; necesita HTTPS.
+
 ## Portal de propietarios separado y rediseñado
 
 El **25/10/2026** el portal dejó de compartir la interfaz interna:
@@ -364,31 +398,35 @@ El **25/10/2026** el portal dejó de compartir la interfaz interna:
 
 ## Riesgos y deuda pendiente
 
-- Si `REDIS_URL` no está configurada, el rate limit sigue siendo local y no coordina
-  réplicas; en producción conviene definirla. Con Redis caído el respaldo local protege
-  por instancia, pero no coordina el bloqueo entre réplicas mientras dure la caída.
-- El MongoDB de Compose y el nativo conviven solo porque usan puertos distintos
-  (`27018` y `27017`). Si se cambia `MONGO_HOST_PORT`, revisar el `.env` y la URI.
+- La app está publicada por **HTTP** en la LAN (`http://192.168.0.67:8080`); las
+  credenciales viajan sin cifrar. No abrir 8080 a Internet. Antes del uso real hay que
+  configurar HTTPS/Cloudflare y pasar `COOKIE_SECURE=true` y `APP_ORIGIN` al dominio.
+- No hay backups automáticos ni prueba de restauración todavía (Fase 7C).
+- MongoDB está fijado en 7.0 por la incompatibilidad del kernel 7.0 con 8.0/8.2. Revisar
+  el salto a una 8.x estable cuando esté disponible.
+- La notebook es un único punto de falla: si se apaga o pierde Internet, la app deja de
+  estar disponible. El HDD y el swap pueden afectar la latencia bajo carga.
+- El MongoDB de Compose de desarrollo y el nativo conviven solo porque el de desarrollo
+  usa otro puerto (`27018`). En producción el Compose no publica MongoDB ni Redis.
 - Falta una pasada manual en navegador por `/staff`, `/admin` y el rediseño del portal
   con datos reales de prueba; la cobertura actual es de tests de componentes.
 - El proveedor `meta` no se probó contra la API real: faltan credenciales y una plantilla
   aprobada. El proveedor `console` sí se validó contra un Redis real.
-- El Redis de Compose se levantó y el flujo encolado → worker → `sent` quedó validado con
-  `pnpm smoke:notifications` (27/27, incluido el reintento manual).
 - Un aviso `queued` cuyo trabajo se perdió en Redis no se reencola solo: queda visible en
   el listado para decidir a mano. La reconciliación tampoco puede avanzar mientras Redis
   siga caído; los `pending` esperan en Mongo y se reencolan cuando vuelve.
 - El presupuesto de CSS del portal se amplió a 12/16 kB; conviene dividir la vista en
   componentes si sigue creciendo.
-- Los iconos PWA son los genéricos que genera Angular.
-- Backups, restauración, HTTPS y endurecimiento de producción siguen pendientes.
-- No se probó el flujo en un dispositivo móvil real ni la instalación de la PWA.
+- Los iconos PWA son los genéricos que genera Angular. La PWA no se instala ni cachea
+  offline por HTTP; necesita HTTPS.
+- No se probó el flujo en un dispositivo móvil real.
 
 ## Próximos pasos sugeridos
 
-1. Fase 7C: backups cifrados, copia fuera del equipo y prueba de restauración.
-2. Fase 7D: credenciales de Meta, plantilla real y webhook público con HTTPS.
-3. Fase 8: despliegue en Ubuntu Server con Nginx, Cloudflare Tunnel y HTTPS.
+1. Cloudflare Tunnel + HTTPS; actualizar `APP_ORIGIN` y `COOKIE_SECURE=true`.
+2. Fase 7C: backups cifrados, copia fuera del equipo y prueba de restauración.
+3. Fase 7D: credenciales de Meta, plantilla real y webhook público con HTTPS.
+4. Pasada manual en navegador y celular por `/portal`, `/staff` y `/admin`.
 
 ## Checklist para retomar
 
@@ -414,5 +452,11 @@ El **25/10/2026** el portal dejó de compartir la interfaz interna:
 - [x] Reintento y reconciliación validados con Mongo y Redis reales (27/27).
 - [x] Fase 7B implementada: rate limit compartido en Redis con respaldo local.
 - [x] Rate limit validado con dos instancias y con Redis caído (19/19).
+- [x] Docker 29 y Compose 2.40 instalados en la notebook.
+- [x] Stack de producción arriba en `http://192.168.0.67:8080` (health y login 200).
+- [x] App de facturación del puerto 80 y MongoDB nativo intactos.
+- [x] MongoDB 7.0 del Compose estable, sin reinicios.
+- [ ] Configurar Cloudflare Tunnel/HTTPS y `COOKIE_SECURE=true`.
+- [ ] Configurar backups y probar una restauración.
 - [ ] Probar el proveedor `meta` con credenciales y plantilla reales.
 - [ ] Pasada manual en navegador de `/portal`, `/staff` y `/admin`.

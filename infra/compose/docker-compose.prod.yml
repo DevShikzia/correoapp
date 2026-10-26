@@ -8,7 +8,10 @@ x-logging: &default-logging
 
 services:
   mongo:
-    image: mongo:8.0
+    # 7.0 es la versión validada en este kernel (el MongoDB nativo del servidor
+    # es 7.0.32). La imagen 8.0 se niega a arrancar en Linux 6.19+ y 8.2 se
+    # reinició con SIGSEGV durante las pruebas.
+    image: mongo:7.0
     restart: unless-stopped
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:?falta MONGO_ROOT_USER}
@@ -18,7 +21,7 @@ services:
       MONGO_APP_USER: ${MONGO_APP_USER:?falta MONGO_APP_USER}
       MONGO_APP_PASSWORD: ${MONGO_APP_PASSWORD:?falta MONGO_APP_PASSWORD}
     # Sin `ports:`: solo alcanzable desde la red interna de Compose.
-    command: ['mongod', '--wiredTigerCacheSizeGB', '0.5']
+    command: ['mongod', '--wiredTigerCacheSizeGB', '0.25']
     volumes:
       - mongo-data:/data/db
       - ../mongo/init-app-user.js:/docker-entrypoint-initdb.d/init-app-user.js:ro
@@ -38,7 +41,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 768m
+          memory: 1g
 
   redis:
     image: redis:7.4-alpine

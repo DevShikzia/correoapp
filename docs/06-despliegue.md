@@ -54,11 +54,47 @@ docker compose --env-file .env `
 - En producción este archivo de desarrollo no se usa: MongoDB y Redis quedan solo en la
   red interna de Compose.
 
-## Notebook de 4 GB RAM
+### Compose de producción en la notebook
+
+Desplegado el **26/10/2026** en Ubuntu Server 26.04 (kernel 7.0), IP `192.168.0.67`:
+
+- Docker 29.1.3 y Compose 2.40.3; el usuario `shikzia` pertenece al grupo `docker`.
+- Código en `/home/shikzia/correspondencia`. Los secretos viven en `.env.production`
+  (permisos `600`) y se generan con `infra/scripts/generate-prod-env.sh`.
+- `infra/compose/docker-compose.prod.yml` levanta `mongo`, `redis`, `api`, `worker` y
+  `web`. Solo `web` publica `${WEB_PORT}` (8080) en la LAN; MongoDB y Redis no tienen
+  `ports:` y quedan en la red interna de Compose.
+- El puerto 8080 evita tocar la app de facturación que ya usa el Nginx del sistema en el
+  puerto 80. Esa app y el MongoDB nativo (7.0.32) no se modificaron.
+- UFW permite 8080 solo desde `192.168.0.0/24`.
+- `mongo:7.0` está fijado a propósito: MongoDB 8.0 se niega a arrancar en kernels 6.19+
+  y 8.2 se reinició con SIGSEGV (código 139) durante las pruebas. 7.0 es la misma versión
+  del MongoDB nativo validado.
+- Primer despliegue: `build`, `up -d`, `sync-indexes` y `bootstrap-admin`. Para actualizar:
+  reemplazar el código, `docker compose ... build api worker web` y `up -d`.
+- `down` conserva los volúmenes; **nunca** usar `down -v` en producción.
+
+Comandos útiles en el servidor:
+
+```bash
+cd ~/correspondencia
+docker compose --env-file .env.production -f infra/compose/docker-compose.prod.yml ps
+docker compose --env-file .env.production -f infra/compose/docker-compose.prod.yml logs -f api
+docker compose --env-file .env.production -f infra/compose/docker-compose.prod.yml up -d
+```
+
+Pendiente para producción: Cloudflare Tunnel/HTTPS (cambiar `APP_ORIGIN` y
+`COOKIE_SECURE=true`), backups y habilitar WhatsApp.
+
+## Notebook (7,1 GB medidos)
 - Ubuntu Server sin entorno gráfico.
-- Empezar con límite conservador para MongoDB (aprox. 512 MB de caché WiredTiger; ajustar tras medir).
-- Redis inicialmente 64–96 MB; revisar política de memoria antes de producción.
-- Limitar heap Node con `NODE_OPTIONS` si las mediciones lo requieren.
+- El servidor actual tiene **7,1 GB de RAM**, 4 GB de swap y 98 GB de disco (83 GB
+  libres). Los límites de Compose dejan margen: MongoDB 1 GB, Redis 160 MB, API 384 MB,
+  worker 320 MB y web 96 MB.
+- Empezar con límite conservador para MongoDB (0,25 GB de caché WiredTiger en el
+  Compose de producción; ajustar tras medir).
+- Redis inicialmente 96 MB en producción; revisar política de memoria antes de crecer.
+- Limitar heap Node con `NODE_OPTIONS` (la API usa 256 MB y el worker 192 MB).
 - Swap de emergencia puede ayudar a evitar una caída, pero el HDD puede volverse muy lento si el sistema empieza a intercambiar memoria continuamente.
 - Medir RAM, CPU, disco y logs en uso real. No asumir que los límites propuestos garantizan el consumo total del proceso.
 

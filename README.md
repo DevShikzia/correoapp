@@ -57,6 +57,21 @@ pnpm dev:web              # Angular en http://localhost:4200 (proxy /api → :30
 pnpm dev:worker           # worker de notificaciones (inactivo si NOTIFICATIONS_ENABLED=false)
 ```
 
+### Servidor de la notebook
+
+La aplicación está desplegada en la notebook Ubuntu de la red local:
+
+- URL: `http://192.168.0.67:8080` (solo LAN).
+- Docker Compose: `infra/compose/docker-compose.prod.yml`; MongoDB 7.0 y Redis internos.
+- No toca la app de facturación que usa el puerto 80 ni su MongoDB nativo.
+- Primer acceso: usuario `admin` y la contraseña de `~/correspondencia/.admin-password`
+  en el servidor. Cambiala creando otro administrador desde `/admin`.
+- `COOKIE_SECURE=false` es temporal para probar por HTTP; al configurar HTTPS debe
+  volver a `true` junto con `APP_ORIGIN=https://dominio-real`.
+- La PWA no se instala ni cachea offline hasta que haya HTTPS.
+
+Detalle de la instalación y comandos en `docs/06-despliegue.md`.
+
 `MONGO_HOST_PORT` define el puerto local del MongoDB de Compose (por defecto `27017`).
 `REDIS_HOST_PORT` hace lo mismo para Redis (por defecto `6379`). Si ya hay un MongoDB
 nativo en `27017`, usar `MONGO_HOST_PORT=27018` en `.env` y ajustar `MONGODB_URI` o
@@ -113,13 +128,13 @@ infra/        Compose (MongoDB y Redis) y, más adelante, Nginx y scripts
 docs/         alcance, plan, estándares, seguridad, API, despliegue y pruebas
 ```
 
-Estado actual: Fases 0 a 6, 7A y 7B implementadas. La API expone `/api/health`, `/api/auth` (login, logout, sesión actual), `/api/lots` y `/api/staff` (solo administradores), `/api/mail` (cualquier vigilador autenticado): alta, pendientes, detalle y entrega, `/api/notifications` (solo administradores): listado de avisos y reintento, `/api/public` (lote + PIN): acceso, logout, sesión actual y consulta de la correspondencia del propio lote, y `/api/webhooks/whatsapp` para los estados del proveedor.
+Estado actual: Fases 0 a 6, 7A y 7B implementadas, y despliegue LAN de la Fase 8 en la notebook. La API expone `/api/health`, `/api/auth` (login, logout, sesión actual), `/api/lots` y `/api/staff` (solo administradores), `/api/mail` (cualquier vigilador autenticado): alta, pendientes, detalle y entrega, `/api/notifications` (solo administradores): listado de avisos y reintento, `/api/public` (lote + PIN): acceso, logout, sesión actual y consulta de la correspondencia del propio lote, y `/api/webhooks/whatsapp` para los estados del proveedor.
 
 - `/portal`: vista pública e independiente para el propietario. Ingresa con lote + PIN, consulta su correspondencia y cierra sesión. No muestra enlaces a Vigilancia ni Administración.
 - `/staff`: login de vigilancia, alta de correspondencia, pendientes paginados y entrega con confirmación.
 - `/admin`: solo administradores; alta y edición de lotes, contactos, PIN, activación/desactivación y gestión de vigiladores.
 
-Tests actuales: **184 API + 19 worker + 34 web**, con lint, typecheck, build y formato en verde.
+Tests actuales: **188 API + 21 worker + 34 web**, con lint, typecheck, build y formato en verde.
 
 Notas de operación:
 - Todos los endpoints internos exigen la cookie de sesión `staff_session` (`HttpOnly`, `SameSite=Strict`, `Secure` en producción).

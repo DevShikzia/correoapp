@@ -15,7 +15,8 @@ nativo como contra el MongoDB y el Redis de Compose. La Fase 6 agrega **11 tests
 worker** y **4 tests web** nuevos (34 en total) sobre los 149 de la API. La Fase 7A suma
 **26 tests de API** (175) y **8 del worker** (19): reintento manual, listado de avisos y
 reconciliación. La Fase 7B suma **9 tests de API** (184) y una prueba real con dos
-instancias de la API compartiendo el bloqueo por Redis.
+instancias de la API compartiendo el bloqueo por Redis. El arreglo de variables de
+entorno vacías suma **4 tests de API** (188) y **2 del worker** (21).
 
 - [x] Login correcto e incorrecto de vigilador.
 - [x] Vigilador desactivado no puede seguir usando sesión.
@@ -34,6 +35,8 @@ instancias de la API compartiendo el bloqueo por Redis.
 - [x] Solo un administrador puede reintentar avisos y el reintento no duplica mensajes.
 - [x] Los avisos `pending` viejos se reencolan sin tocar `queued`/`sending`.
 - [x] El listado de avisos enmascara los teléfonos y no los expone completos.
+- [x] La app responde por LAN en `http://192.168.0.67:8080` y el login funciona.
+- [x] El despliegue no afecta la app existente del puerto 80 ni el MongoDB nativo.
 - [x] Respuestas privadas no se guardan en caché PWA.
 - [ ] Logs no contienen secretos ni datos sensibles.
 - [x] MongoDB y Redis no están publicados en Internet (solo loopback en desarrollo y red interna en producción).
