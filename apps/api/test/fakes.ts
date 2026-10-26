@@ -20,6 +20,7 @@ import type {
 import type {
   CreateNotificationJobInput,
   NotificationJobRecord,
+  NotificationListQuery,
   NotificationRepository,
 } from '../src/modules/notifications/notification.repository.js';
 import type {
@@ -530,6 +531,7 @@ export function createNotificationRepositoryFake(
           phone: input.phone,
           status: 'pending',
           attempts: 0,
+          retryCount: 0,
           providerMessageId: null,
           providerStatus: null,
           lastErrorCode: null,
@@ -547,6 +549,23 @@ export function createNotificationRepositoryFake(
 
     async findById(id: string): Promise<NotificationJobRecord | null> {
       return records.get(id) ?? null;
+    },
+
+    async list({
+      status,
+      page,
+      limit,
+    }: NotificationListQuery): Promise<Paginated<NotificationJobRecord>> {
+      const matches = [...records.values()]
+        .filter((record) => status === undefined || record.status === status)
+        .sort((first, second) => second.createdAt.getTime() - first.createdAt.getTime());
+
+      return {
+        items: matches.slice((page - 1) * limit, page * limit),
+        page,
+        limit,
+        total: matches.length,
+      };
     },
 
     async markQueued(id: string): Promise<void> {
@@ -573,6 +592,31 @@ export function createNotificationRepositoryFake(
 
     async markFailed(id: string, errorCode: string): Promise<void> {
       update(id, { status: 'failed', lastErrorCode: errorCode });
+    },
+
+    async resetForRetry(id: string): Promise<NotificationJobRecord | null> {
+      const current = records.get(id);
+
+      if (current === undefined || (current.status !== 'failed' && current.status !== 'pending')) {
+        return null;
+      }
+
+      return update(id, {
+        status: 'queued',
+        attempts: 0,
+        lastErrorCode: null,
+        retryCount: current.retryCount + 1,
+      });
+    },
+
+    async revertToPending(id: string): Promise<void> {
+      const current = records.get(id);
+
+      if (current === undefined || current.status !== 'queued') {
+        return;
+      }
+
+      update(id, { status: 'pending' });
     },
 
     async applyProviderStatus(

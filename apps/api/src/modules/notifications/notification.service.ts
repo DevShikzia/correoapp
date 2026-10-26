@@ -13,7 +13,7 @@ export interface MailNotifier {
 }
 
 export interface NotificationQueue {
-  enqueue(notificationId: string): Promise<void>;
+  enqueue(notificationId: string, retryCount: number): Promise<void>;
 }
 
 export interface NotificationLogger {
@@ -66,7 +66,7 @@ export function createNotificationService(deps: NotificationServiceDeps): MailNo
         }
 
         try {
-          await deps.queue.enqueue(job.id);
+          await deps.queue.enqueue(job.id, job.retryCount);
           await deps.jobs.markQueued(job.id);
         } catch (error) {
           // El aviso queda pendiente en MongoDB; se puede reintentar sin perderlo.

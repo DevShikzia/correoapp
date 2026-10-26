@@ -9,11 +9,12 @@
 
 ## Casos críticos
 
-Estado al **25/10/2026**: los casos marcados se verificaron con tests automatizados y/o
-el smoke HTTP (`pnpm smoke:http`), tanto contra MongoDB nativo como contra el MongoDB
-de Compose. La Fase 6 agrega **11 tests del worker** y **4 tests web** nuevos (34 en
-total) sobre los 149 de la API. El flujo de notificaciones también se validó de punta
-a punta con Redis real y el proveedor `console` (`pnpm smoke:notifications`, 16/16).
+Estado al **26/10/2026**: los casos marcados se verificaron con tests automatizados y/o
+los smokes HTTP (`pnpm smoke:http` y `pnpm smoke:notifications`), tanto contra MongoDB
+nativo como contra el MongoDB y el Redis de Compose. La Fase 6 agrega **11 tests del
+worker** y **4 tests web** nuevos (34 en total) sobre los 149 de la API. La Fase 7A suma
+**26 tests de API** (175) y **8 del worker** (19): reintento manual, listado de avisos y
+reconciliación.
 
 - [x] Login correcto e incorrecto de vigilador.
 - [x] Vigilador desactivado no puede seguir usando sesión.
@@ -27,6 +28,9 @@ a punta con Redis real y el proveedor `console` (`pnpm smoke:notifications`, 16/
 - [x] Doble solicitud de entrega no genera registros contradictorios.
 - [x] Una falla del proveedor WhatsApp no borra la correspondencia.
 - [x] Reintentos y webhooks duplicados no duplican estados ni acciones.
+- [x] Solo un administrador puede reintentar avisos y el reintento no duplica mensajes.
+- [x] Los avisos `pending` viejos se reencolan sin tocar `queued`/`sending`.
+- [x] El listado de avisos enmascara los teléfonos y no los expone completos.
 - [x] Respuestas privadas no se guardan en caché PWA.
 - [ ] Logs no contienen secretos ni datos sensibles.
 - [x] MongoDB y Redis no están publicados en Internet (solo loopback en desarrollo y red interna en producción).

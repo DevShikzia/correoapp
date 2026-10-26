@@ -1,7 +1,13 @@
 import { model, Schema, type HydratedDocument, type Types } from 'mongoose';
 
 export const AUDIT_ACTOR_TYPES = ['staff', 'owner', 'system'] as const;
-export const AUDIT_ENTITY_TYPES = ['lot', 'staffUser', 'mailItem', 'publicSession'] as const;
+export const AUDIT_ENTITY_TYPES = [
+  'lot',
+  'staffUser',
+  'mailItem',
+  'publicSession',
+  'notification',
+] as const;
 export const AUDIT_ACTIONS = [
   'lot.created',
   'lot.updated',
@@ -10,6 +16,7 @@ export const AUDIT_ACTIONS = [
   'staff.updated',
   'mail.created',
   'mail.delivered',
+  'notification.retried',
 ] as const;
 
 export type AuditActorType = (typeof AUDIT_ACTOR_TYPES)[number];

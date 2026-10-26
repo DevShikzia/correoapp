@@ -113,13 +113,13 @@ infra/        Compose (MongoDB y Redis) y, más adelante, Nginx y scripts
 docs/         alcance, plan, estándares, seguridad, API, despliegue y pruebas
 ```
 
-Estado actual: Fases 0 a 6 implementadas. La API expone `/api/health`, `/api/auth` (login, logout, sesión actual), `/api/lots` y `/api/staff` (solo administradores), `/api/mail` (cualquier vigilador autenticado): alta, pendientes, detalle y entrega, `/api/public` (lote + PIN): acceso, logout, sesión actual y consulta de la correspondencia del propio lote, y `/api/webhooks/whatsapp` para los estados del proveedor.
+Estado actual: Fases 0 a 6 y la Fase 7A implementadas. La API expone `/api/health`, `/api/auth` (login, logout, sesión actual), `/api/lots` y `/api/staff` (solo administradores), `/api/mail` (cualquier vigilador autenticado): alta, pendientes, detalle y entrega, `/api/notifications` (solo administradores): listado de avisos y reintento, `/api/public` (lote + PIN): acceso, logout, sesión actual y consulta de la correspondencia del propio lote, y `/api/webhooks/whatsapp` para los estados del proveedor.
 
 - `/portal`: vista pública e independiente para el propietario. Ingresa con lote + PIN, consulta su correspondencia y cierra sesión. No muestra enlaces a Vigilancia ni Administración.
 - `/staff`: login de vigilancia, alta de correspondencia, pendientes paginados y entrega con confirmación.
 - `/admin`: solo administradores; alta y edición de lotes, contactos, PIN, activación/desactivación y gestión de vigiladores.
 
-Tests actuales: **149 API + 11 worker + 34 web**, con lint, typecheck, build y formato en verde.
+Tests actuales: **175 API + 19 worker + 34 web**, con lint, typecheck, build y formato en verde.
 
 Notas de operación:
 - Todos los endpoints internos exigen la cookie de sesión `staff_session` (`HttpOnly`, `SameSite=Strict`, `Secure` en producción).
@@ -139,6 +139,8 @@ Notas de operación:
 - Apagadas por defecto (`NOTIFICATIONS_ENABLED=false`): no se crean avisos ni se usa Redis. La correspondencia se registra igual.
 - Al activarlas, la API guarda y audita la correspondencia **primero**; después crea un `NotificationJob` durable por teléfono único y lo encola en BullMQ. Si Redis falla, el aviso queda `pending` y el alta no se revierte.
 - El worker corre como proceso aparte (`pnpm dev:worker`), con reintentos limitados (`NOTIFICATION_MAX_ATTEMPTS`), backoff exponencial (`NOTIFICATION_BACKOFF_MS`) e idempotencia por `jobId` y estado del aviso.
+- `GET /api/notifications` (solo admin) lista los avisos con el teléfono enmascarado y filtro por estado; `POST /api/notifications/:id/retry` reencola un aviso `failed` o `pending`. Los estados `queued`, `sending` y `sent` responden `409` para no duplicar un mensaje.
+- El worker reconcilia al arrancar y cada 5 minutos: reencola avisos `pending` con más de 2 minutos. No toca `queued` ni `sending` porque ahí el mensaje pudo salir sin confirmación.
 - `WHATSAPP_PROVIDER=console` simula el envío para desarrollo; `meta` usa WhatsApp Cloud API. La plantilla aprobada debe tener una variable en el cuerpo (`{{1}}` = número de lote). No se envía la descripción ni datos de la correspondencia.
 - `POST /api/webhooks/whatsapp` valida la firma `X-Hub-Signature-256` con `WHATSAPP_APP_SECRET` y actualiza estados. Queda fuera del guard de `Origin` porque lo invoca Meta; el `GET` de verificación usa `WHATSAPP_WEBHOOK_VERIFY_TOKEN`.
 - Para probar en desarrollo: `NOTIFICATIONS_ENABLED=true`, `WHATSAPP_PROVIDER=console`, `REDIS_URL=redis://127.0.0.1:6379` y el contenedor `redis` levantado. Los envíos reales requieren credenciales y plantilla aprobada de Meta; no se versionan.

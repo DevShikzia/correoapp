@@ -12,6 +12,7 @@ const NOTIFICATION: NotificationJobRecord = {
   phone: '+5491122334455',
   status: 'sent',
   attempts: 1,
+  retryCount: 0,
   providerMessageId: 'wamid.1',
   providerStatus: 'sent',
   lastErrorCode: null,

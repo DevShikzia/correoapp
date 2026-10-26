@@ -9,6 +9,7 @@ import { noStore } from './middleware/no-store.js';
 import { createAuthRouter } from './modules/auth/auth.routes.js';
 import { createLotsRouter } from './modules/lots/lots.routes.js';
 import { createMailRouter } from './modules/mail/mail.routes.js';
+import { createNotificationsRouter } from './modules/notifications/notification.routes.js';
 import { createWhatsappWebhookRouter } from './modules/notifications/whatsapp-webhook.routes.js';
 import { createPublicRouter } from './modules/public/public.routes.js';
 import { createStaffRouter } from './modules/staff/staff.routes.js';
@@ -84,6 +85,13 @@ export function createApp(
     '/api/staff',
     createStaffRouter({
       service: dependencies.staff,
+      requireAuth: dependencies.requireStaffAuth,
+    }),
+  );
+  app.use(
+    '/api/notifications',
+    createNotificationsRouter({
+      service: dependencies.notificationAdmin,
       requireAuth: dependencies.requireStaffAuth,
     }),
   );

@@ -5,6 +5,8 @@ const BOOLEAN_VALUES = ['true', 'false'] as const;
 const WHATSAPP_PROVIDERS = ['disabled', 'console', 'meta'] as const;
 
 const NOTIFICATION_CONCURRENCY_DEFAULT = 5;
+const NOTIFICATION_MAX_ATTEMPTS_DEFAULT = 5;
+const NOTIFICATION_BACKOFF_MS_DEFAULT = 30_000;
 const WHATSAPP_API_URL_DEFAULT = 'https://graph.facebook.com/v23.0';
 const WHATSAPP_TEMPLATE_LANGUAGE_DEFAULT = 'es_AR';
 
@@ -23,6 +25,18 @@ const envSchema = z.object({
     .min(1)
     .max(50)
     .default(NOTIFICATION_CONCURRENCY_DEFAULT),
+  NOTIFICATION_MAX_ATTEMPTS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(10)
+    .default(NOTIFICATION_MAX_ATTEMPTS_DEFAULT),
+  NOTIFICATION_BACKOFF_MS: z.coerce
+    .number()
+    .int()
+    .min(1_000)
+    .max(600_000)
+    .default(NOTIFICATION_BACKOFF_MS_DEFAULT),
   WHATSAPP_PROVIDER: z.enum(WHATSAPP_PROVIDERS).default('disabled'),
   WHATSAPP_API_URL: z.url().default(WHATSAPP_API_URL_DEFAULT),
   WHATSAPP_PHONE_NUMBER_ID: z.string().min(1).optional(),

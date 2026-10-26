@@ -32,6 +32,7 @@ const KEEP_DATA = process.env.SMOKE_KEEP_DATA === 'true';
 const LOT_NUMBER = '901';
 const LOT_PIN = '9011';
 const CONTACT_PHONE = '+5491100000901';
+const RETRY_PHONE = '+5491100000902';
 const MAIL_DESCRIPTION = 'Carta de prueba e2e';
 const GUARD_USERNAME = 'vigilador.e2e';
 const GUARD_PASSWORD = `E2e-${randomUUID()}-2026!`;
@@ -159,6 +160,24 @@ async function waitForNotification(mailItemId) {
   return null;
 }
 
+async function waitForNotificationById(notificationId) {
+  const deadline = Date.now() + TIMEOUT_MS;
+  const notificationObjectId = new mongoose.Types.ObjectId(notificationId);
+  const jobs = mongoose.connection.collection('notificationjobs');
+
+  while (Date.now() < deadline) {
+    const job = await jobs.findOne({ _id: notificationObjectId });
+
+    if (job !== null && (job.status === 'sent' || job.status === 'failed')) {
+      return job;
+    }
+
+    await delay(POLL_INTERVAL_MS);
+  }
+
+  return null;
+}
+
 async function runChecks(adminJar) {
   const health = await call('GET', '/health');
   expectStatus('health', health, 200);
@@ -210,9 +229,15 @@ async function runChecks(adminJar) {
   expectStatus('registrar correspondencia', mail, 201);
 
   const mailItemId = mail.body?.data?.id;
+  const lotId = lot.body?.data?.id;
 
   if (typeof mailItemId !== 'string') {
     abort('la API no devolvió el id de la correspondencia');
+    return;
+  }
+
+  if (typeof lotId !== 'string') {
+    abort('la API no devolvió el id del lote');
     return;
   }
 
@@ -248,6 +273,76 @@ async function runChecks(adminJar) {
     'el aviso no expone otros datos internos',
     !/pinHash|passwordHash|contacts/.test(JSON.stringify(job)),
   );
+
+  await checkRetryAndList(adminJar, guardJar, { mailItemId, lotId });
+}
+
+async function checkRetryAndList(adminJar, guardJar, { mailItemId, lotId }) {
+  const jobs = mongoose.connection.collection('notificationjobs');
+  const retryNotificationId = new mongoose.Types.ObjectId();
+
+  await jobs.insertOne({
+    _id: retryNotificationId,
+    mailItemId: new mongoose.Types.ObjectId(mailItemId),
+    lotId: new mongoose.Types.ObjectId(lotId),
+    lotNumber: LOT_NUMBER,
+    phone: RETRY_PHONE,
+    status: 'failed',
+    attempts: 5,
+    retryCount: 0,
+    providerMessageId: null,
+    providerStatus: null,
+    lastErrorCode: 'HTTP_503',
+    sentAt: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+
+  const retry = await call('POST', `/notifications/${retryNotificationId.toHexString()}/retry`, {
+    jar: adminJar,
+  });
+  expectStatus('reintentar un aviso fallido', retry, 200);
+  check('el reintento deja el aviso en cola', retry.body?.data?.status === 'queued');
+  check('el reintento no expone el teléfono', !JSON.stringify(retry.body).includes(RETRY_PHONE));
+
+  const retried = await waitForNotificationById(retryNotificationId.toHexString());
+
+  if (retried === null) {
+    abort(`el worker no procesó el reintento en ${TIMEOUT_MS} ms`);
+    return;
+  }
+
+  check(
+    'el reintento termina enviado',
+    retried.status === 'sent',
+    `estado ${String(retried.status)}`,
+  );
+  check('el reintento usa un jobId nuevo', retried.retryCount === 1);
+
+  const secondRetry = await call(
+    'POST',
+    `/notifications/${retryNotificationId.toHexString()}/retry`,
+    {
+      jar: adminJar,
+    },
+  );
+  expectStatus('un aviso enviado no se reintenta', secondRetry, 409);
+
+  const list = await call('GET', '/notifications?status=sent', { jar: adminJar });
+  expectStatus('listar avisos enviados', list, 200);
+  const listedIds = (list.body?.data ?? []).map((item) => item.id);
+  check(
+    'el listado incluye el aviso reintentado',
+    listedIds.includes(retryNotificationId.toHexString()),
+  );
+  check('el listado enmascara los teléfonos', !JSON.stringify(list.body).includes(RETRY_PHONE));
+  check(
+    'el listado no devuelve el campo phone',
+    (list.body?.data ?? []).every((item) => !('phone' in item)),
+  );
+
+  const guardList = await call('GET', '/notifications', { jar: guardJar });
+  expectStatus('el vigilador no puede listar avisos', guardList, 403);
 }
 
 async function main() {

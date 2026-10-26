@@ -1,7 +1,11 @@
 import { Queue } from 'bullmq';
 import type { ConnectionOptions } from 'bullmq';
 import { env } from '../../config/env.js';
-import { NOTIFICATION_JOB_NAME, NOTIFICATIONS_QUEUE_NAME } from './notification.constants.js';
+import {
+  NOTIFICATION_JOB_NAME,
+  NOTIFICATIONS_QUEUE_NAME,
+  notificationJobId,
+} from './notification.constants.js';
 import type { NotificationQueue, NotificationLogger } from './notification.service.js';
 
 const REDIS_CONNECT_TIMEOUT_MS = 3_000;
@@ -43,9 +47,15 @@ export function createBullNotificationQueue(
   });
 
   return {
-    async enqueue(notificationId: string): Promise<void> {
+    async enqueue(notificationId: string, retryCount: number): Promise<void> {
       // El id del aviso como jobId evita duplicados si se encola dos veces.
-      await queue.add(NOTIFICATION_JOB_NAME, { notificationId }, { jobId: notificationId });
+      // Cada reintento necesita un jobId nuevo: BullMQ ignora un `add` con un
+      // jobId que ya existe en el conjunto de completados.
+      await queue.add(
+        NOTIFICATION_JOB_NAME,
+        { notificationId },
+        { jobId: notificationJobId(notificationId, retryCount) },
+      );
     },
   };
 }

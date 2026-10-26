@@ -3,11 +3,22 @@ import { env } from './config/env.js';
 import { logger } from './config/logger.js';
 import { connectDatabase, disconnectDatabase } from './db/mongoose.js';
 import { NOTIFICATIONS_QUEUE_NAME } from './notifications/notification.constants.js';
-import { notificationJobRepository } from './notifications/notification.repository.js';
+import {
+  RECONCILE_BATCH_SIZE,
+  RECONCILE_INTERVAL_MS,
+  RECONCILE_MAX_BATCHES,
+  STALE_PENDING_AGE_MS,
+} from './notifications/notification.constants.js';
+import {
+  notificationJobRepository,
+  notificationRequeueRepository,
+} from './notifications/notification.repository.js';
 import { createNotificationProcessor } from './notifications/process-notification.js';
 import type { NotificationJobData } from './notifications/process-notification.js';
 import { createNotificationProvider } from './notifications/provider-factory.js';
-import { redisConnectionOptions } from './notifications/queue.js';
+import { createNotificationQueue, redisConnectionOptions } from './notifications/queue.js';
+import { createNotificationReconciler } from './notifications/reconcile.js';
+import { startReconcileScheduler } from './notifications/reconcile-scheduler.js';
 
 const KEEP_ALIVE_INTERVAL_MS = 60_000;
 const SHUTDOWN_TIMEOUT_MS = 10_000;
@@ -81,6 +92,22 @@ async function main(): Promise<void> {
     logger.error({ err: error }, 'error del worker de notificaciones');
   });
 
+  const queue = createNotificationQueue(env.REDIS_URL, logger);
+  const reconcile = createNotificationReconciler({
+    jobs: notificationRequeueRepository,
+    queue,
+    logger,
+    now: () => new Date(),
+    staleAfterMs: STALE_PENDING_AGE_MS,
+    batchSize: RECONCILE_BATCH_SIZE,
+    maxBatches: RECONCILE_MAX_BATCHES,
+  });
+  const scheduler = startReconcileScheduler({
+    reconcile,
+    logger,
+    intervalMs: RECONCILE_INTERVAL_MS,
+  });
+
   let shuttingDown = false;
 
   async function shutdown(signal: NodeJS.Signals): Promise<void> {
@@ -98,7 +125,9 @@ async function main(): Promise<void> {
     forceExit.unref();
 
     try {
+      scheduler.stop();
       await worker.close();
+      await queue.close();
       await disconnectDatabase();
       process.exit(0);
     } catch (error) {

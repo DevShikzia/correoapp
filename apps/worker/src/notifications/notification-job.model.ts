@@ -13,6 +13,7 @@ export interface NotificationJobAttrs {
   phone: string;
   status: NotificationStatus;
   attempts: number;
+  retryCount: number;
   providerMessageId: string | null;
   providerStatus: string | null;
   lastErrorCode: string | null;
@@ -29,6 +30,7 @@ const notificationJobSchema = new Schema<NotificationJobAttrs>(
     phone: { type: String, required: true, trim: true, match: PHONE_PATTERN },
     status: { type: String, required: true, enum: NOTIFICATION_STATUSES, default: 'pending' },
     attempts: { type: Number, required: true, default: 0, min: 0 },
+    retryCount: { type: Number, required: true, default: 0, min: 0 },
     providerMessageId: { type: String, default: null },
     providerStatus: { type: String, default: null },
     lastErrorCode: { type: String, default: null, maxlength: 64 },

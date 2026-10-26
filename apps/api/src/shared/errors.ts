@@ -5,6 +5,7 @@ export type ErrorCode =
   | 'NOT_FOUND'
   | 'CONFLICT'
   | 'TOO_MANY_REQUESTS'
+  | 'SERVICE_UNAVAILABLE'
   | 'INTERNAL_ERROR';
 
 export class AppError extends Error {

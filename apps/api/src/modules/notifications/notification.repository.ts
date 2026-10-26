@@ -1,11 +1,18 @@
 import { isValidObjectId, Types } from 'mongoose';
 import { PHONE_PATTERN } from '../lots/lot.constants.js';
 import { isDuplicateKeyError } from '../../shared/mongo-errors.js';
+import type { Paginated } from '../../shared/pagination.js';
 import {
   NotificationJobModel,
   type NotificationJobDocument,
   type NotificationStatus,
 } from './notification-job.model.js';
+
+export interface NotificationListQuery {
+  status?: NotificationStatus;
+  page: number;
+  limit: number;
+}
 
 export interface NotificationJobRecord {
   id: string;
@@ -15,6 +22,7 @@ export interface NotificationJobRecord {
   phone: string;
   status: NotificationStatus;
   attempts: number;
+  retryCount: number;
   providerMessageId: string | null;
   providerStatus: string | null;
   lastErrorCode: string | null;
@@ -33,11 +41,14 @@ export interface CreateNotificationJobInput {
 export interface NotificationRepository {
   createMany(inputs: CreateNotificationJobInput[]): Promise<NotificationJobRecord[]>;
   findById(id: string): Promise<NotificationJobRecord | null>;
+  list(query: NotificationListQuery): Promise<Paginated<NotificationJobRecord>>;
   markQueued(id: string): Promise<void>;
   markSending(id: string, attempt: number): Promise<NotificationJobRecord | null>;
   markSent(id: string, providerMessageId: string, sentAt: Date): Promise<void>;
   markRetry(id: string, errorCode: string): Promise<void>;
   markFailed(id: string, errorCode: string): Promise<void>;
+  resetForRetry(id: string): Promise<NotificationJobRecord | null>;
+  revertToPending(id: string): Promise<void>;
   applyProviderStatus(
     providerMessageId: string,
     status: 'sent' | 'failed',
@@ -55,6 +66,7 @@ function toRecord(doc: NotificationJobDocument): NotificationJobRecord {
     phone: doc.phone,
     status: doc.status,
     attempts: doc.attempts,
+    retryCount: doc.retryCount ?? 0,
     providerMessageId: doc.providerMessageId,
     providerStatus: doc.providerStatus,
     lastErrorCode: doc.lastErrorCode,
@@ -124,6 +136,24 @@ export const notificationRepository: NotificationRepository = {
     return doc === null ? null : toRecord(doc);
   },
 
+  async list({
+    status,
+    page,
+    limit,
+  }: NotificationListQuery): Promise<Paginated<NotificationJobRecord>> {
+    const filter = status === undefined ? {} : { status };
+
+    const [documents, total] = await Promise.all([
+      NotificationJobModel.find(filter)
+        .sort({ createdAt: -1, _id: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit),
+      NotificationJobModel.countDocuments(filter),
+    ]);
+
+    return { items: documents.map(toRecord), page, limit, total };
+  },
+
   async markQueued(id: string): Promise<void> {
     if (!isValidObjectId(id)) {
       return;
@@ -187,6 +217,36 @@ export const notificationRepository: NotificationRepository = {
     await NotificationJobModel.updateOne(
       { _id: id },
       { $set: { status: 'failed', lastErrorCode: errorCode } },
+    );
+  },
+
+  async resetForRetry(id: string): Promise<NotificationJobRecord | null> {
+    if (!isValidObjectId(id)) {
+      return null;
+    }
+
+    // Solo los avisos reintentables pasan a `queued`; dos reintentos simultáneos
+    // compiten por la misma condición y únicamente uno gana.
+    const doc = await NotificationJobModel.findOneAndUpdate(
+      { _id: id, status: { $in: ['failed', 'pending'] } },
+      {
+        $set: { status: 'queued', attempts: 0, lastErrorCode: null },
+        $inc: { retryCount: 1 },
+      },
+      { returnDocument: 'after', runValidators: true },
+    );
+
+    return doc === null ? null : toRecord(doc);
+  },
+
+  async revertToPending(id: string): Promise<void> {
+    if (!isValidObjectId(id)) {
+      return;
+    }
+
+    await NotificationJobModel.updateOne(
+      { _id: id, status: 'queued' },
+      { $set: { status: 'pending' } },
     );
   },
 

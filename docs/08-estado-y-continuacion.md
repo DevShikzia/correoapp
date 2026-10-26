@@ -1,8 +1,8 @@
 # 8. Estado actual y continuación
 
-Registro de estado al **25/10/2026**. El código incluye las fases 0 a 6 y el rediseño
-del portal de propietarios. Los últimos commits están en `main`; este documento se
-actualiza junto con cada fase.
+Registro de estado al **26/10/2026**. El código incluye las fases 0 a 6, el rediseño
+del portal de propietarios y la Fase 7A (reintento y reconciliación de avisos). Los
+últimos commits están en `main`; este documento se actualiza junto con cada fase.
 
 Este documento resume lo hecho, lo verificado, lo que falta y los pasos exactos para
 retomar después de reiniciar Windows. No contiene contraseñas ni secretos: los valores
@@ -10,7 +10,7 @@ locales viven en `.env`, que está ignorado por Git.
 
 ## Resumen funcional
 
-- Fases 0 a 6 del plan implementadas.
+- Fases 0 a 6 y Fase 7A del plan implementadas.
 - API Express + TypeScript con autenticación de staff, lotes, vigiladores,
   correspondencia, auditoría y portal de propietarios.
 - Portal Angular `/portal` con lote + PIN, listado paginado, estados y logout.
@@ -19,9 +19,10 @@ locales viven en `.env`, que está ignorado por Git.
   confirmación.
 - Interfaz `/admin` para lotes, contactos, PIN y gestión de vigiladores.
 - Notificaciones por WhatsApp asíncronas con cola BullMQ, worker separado, reintentos
-  limitados, idempotencia y webhook autenticado. Apagadas por defecto.
+  limitados, idempotencia, webhook autenticado, reintento manual y reconciliación de
+  avisos `pending`. Apagadas por defecto.
 - PWA con service worker; `/api` queda fuera de caché (`dataGroups: []`).
-- Tests actuales: **149 API + 11 worker + 34 web**, con lint, typecheck, build y formato
+- Tests actuales: **175 API + 19 worker + 34 web**, con lint, typecheck, build y formato
   en verde.
 - **Docker Compose validado** con `docker compose config`: MongoDB `mongo:8.0` y Redis
   `redis:7.4-alpine`, ambos en red interna y publicados solo en loopback en desarrollo.
@@ -239,13 +240,44 @@ worker corriendo con `WHATSAPP_PROVIDER=console` y una base descartable,
 `pnpm smoke:notifications` verificó **16/16**: la correspondencia se guarda, se crea un
 único aviso, el worker lo envía al primer intento y queda `sent` con el lote, el teléfono
 y la fecha. El aviso no contiene la descripción. Los logs de la API y del worker no
-mostraron teléfonos, PIN, cookies ni credenciales.
+mostraron teléfonos, PIN, cookies ni credenciales. La Fase 7A extendió el mismo script a
+**27 verificaciones** con el reintento manual y el listado enmascarado.
 
 Pendiente de la Fase 6:
 
 - Probar con credenciales y plantilla reales de Meta: no hay secretos disponibles.
-- Endpoint `POST /notifications/:id/retry` para administradores (previsto para Fase 7).
 - Configurar el webhook público con HTTPS y validarlo desde Meta.
+
+## Fase 7A — Resiliencia de avisos
+
+Implementada el **26/10/2026**:
+
+1. `POST /api/notifications/:id/retry` (solo admin) pasa un aviso `failed` o `pending` a
+   `queued` con un `findOneAndUpdate` condicional, reinicia `attempts` y limpia
+   `lastErrorCode`. Dos reintentos simultáneos no duplican el envío.
+2. Responde **409** para `queued`, `sending` y `sent`, **404** si el aviso no existe y
+   **503** si Redis falla; en ese último caso el aviso vuelve a `pending`.
+3. `GET /api/notifications?status=&page=&limit=` (solo admin) lista los avisos con el
+   teléfono enmascarado (`+549••••4455`). No devuelve el número completo.
+4. `retryCount` es nuevo en el modelo. Cada reintento usa `jobId = <id>-r<n>`: BullMQ
+   rechaza `:` en los ids personalizados y descarta un `add` con un jobId ya completado.
+5. La reconciliación corre en el worker al arrancar y cada 5 minutos. Reencola solo
+   avisos `pending` con más de 2 minutos y nunca toca `queued`/`sending`, donde el
+   mensaje pudo salir sin confirmación.
+6. La auditoría registra `notification.retried`.
+
+Configuración: no agrega variables nuevas. La API y el worker comparten
+`NOTIFICATION_MAX_ATTEMPTS` y `NOTIFICATION_BACKOFF_MS` para que los trabajos
+reencolados por el worker usen los mismos límites que los de la API.
+
+Validación real del **26/10/2026**:
+
+- `pnpm smoke:notifications` → **27/27**. Incluye un aviso fallido insertado a mano,
+  reintento por el administrador, envío por el worker al primer intento, segundo
+  reintento rechazado (409), listado enmascarado y 403 para vigiladores.
+- Reconciliación con Mongo y Redis reales: un aviso `pending` de 30 minutos se envió al
+  primer intento (`requeued: 1`) mientras uno recién creado siguió `pending`.
+- Sin teléfonos ni credenciales en los logs y sin bases `*e2e*` residuales.
 
 ## Portal de propietarios separado y rediseñado
 
@@ -293,8 +325,12 @@ El **25/10/2026** el portal dejó de compartir la interfaz interna:
   de la cola porque son procesos desplegables separados.
 - El webhook de WhatsApp se monta antes del guard de `Origin` y del parser JSON global,
   porque lo invoca Meta y se autentica con HMAC sobre el cuerpo crudo.
-- Los estados `sent`/`failed` no se reenvían; los reintentos normales reutilizan el mismo
-  registro (`jobId = notificationId`).
+- Los estados `sent`/`failed` no se reenvían. El alta usa `jobId = notificationId`; cada
+  reintento manual usa `<id>-r<n>`, porque BullMQ rechaza `:` en los jobIds personalizados.
+- El listado de avisos es solo para administradores y enmascara el teléfono. No se expone
+  el contacto completo ni se usa para notificar.
+- Los avisos `pending` de más de 2 minutos se reconcilian automáticamente. `queued` y
+  `sending` quedan para revisión manual: el mensaje pudo haber salido sin confirmación.
 - `NOTIFICATIONS_ENABLED=false` es el valor por defecto: sin activarlo no se usa Redis.
 
 ## Riesgos y deuda pendiente
@@ -308,10 +344,10 @@ El **25/10/2026** el portal dejó de compartir la interfaz interna:
 - El proveedor `meta` no se probó contra la API real: faltan credenciales y una plantilla
   aprobada. El proveedor `console` sí se validó contra un Redis real.
 - El Redis de Compose se levantó y el flujo encolado → worker → `sent` quedó validado con
-  `pnpm smoke:notifications` (16/16); la base descartable se eliminó después.
-- La cola no tiene una tarea de reconciliación para avisos `pending` que quedaron sin
-  encolar por una caída de Redis.
-- El endpoint de reintento manual para administradores sigue pendiente.
+  `pnpm smoke:notifications` (27/27, incluido el reintento manual).
+- Un aviso `queued` cuyo trabajo se perdió en Redis no se reencola solo: queda visible en
+  el listado para decidir a mano. La reconciliación tampoco puede avanzar mientras Redis
+  siga caído; los `pending` esperan en Mongo y se reencolan cuando vuelve.
 - El presupuesto de CSS del portal se amplió a 12/16 kB; conviene dividir la vista en
   componentes si sigue creciendo.
 - Los iconos PWA son los genéricos que genera Angular.
@@ -320,9 +356,10 @@ El **25/10/2026** el portal dejó de compartir la interfaz interna:
 
 ## Próximos pasos sugeridos
 
-1. Fase 7: endurecimiento, rate limit compartido, reintento manual, backups y restauración.
-2. Configurar Meta y validar la plantilla real antes de habilitar WhatsApp en producción.
-3. Fase 8: despliegue en Ubuntu Server con Nginx, Cloudflare Tunnel y HTTPS.
+1. Fase 7B: rate limit compartido en Redis para staff y propietarios.
+2. Fase 7C: backups cifrados, copia fuera del equipo y prueba de restauración.
+3. Configurar Meta y validar la plantilla real antes de habilitar WhatsApp en producción.
+4. Fase 8: despliegue en Ubuntu Server con Nginx, Cloudflare Tunnel y HTTPS.
 
 ## Checklist para retomar
 
@@ -344,5 +381,7 @@ El **25/10/2026** el portal dejó de compartir la interfaz interna:
 - [x] Redis agregado a Compose y `.env.example` actualizado.
 - [x] `docker compose config` válido con `mongo` y `redis`.
 - [x] Redis levantado y envío end-to-end con el proveedor `console` (16/16).
+- [x] Fase 7A implementada: reintento manual, listado de avisos y reconciliación.
+- [x] Reintento y reconciliación validados con Mongo y Redis reales (27/27).
 - [ ] Probar el proveedor `meta` con credenciales y plantilla reales.
 - [ ] Pasada manual en navegador de `/portal`, `/staff` y `/admin`.

@@ -9,6 +9,8 @@ import type { LotRecord } from '../src/modules/lots/lots.repository.js';
 import type { MailItemRecord } from '../src/modules/mail/mail.repository.js';
 import { createMailService } from '../src/modules/mail/mail.service.js';
 import type { NotificationJobRecord } from '../src/modules/notifications/notification.repository.js';
+import { createNotificationAdminService } from '../src/modules/notifications/notification-admin.service.js';
+import type { NotificationQueue } from '../src/modules/notifications/notification.service.js';
 import { createWhatsappWebhookService } from '../src/modules/notifications/whatsapp-webhook.service.js';
 import { createRequireOwnerAuth } from '../src/modules/public/owner-auth.middleware.js';
 import { createOwnerAuthService } from '../src/modules/public/owner-auth.service.js';
@@ -98,6 +100,7 @@ export interface TestAppOptions {
   lots?: LotRecord[];
   mail?: MailItemRecord[];
   notifications?: NotificationJobRecord[];
+  notificationsEnabled?: boolean;
 }
 
 export function buildTestApp(options: TestAppOptions = {}) {
@@ -112,6 +115,18 @@ export function buildTestApp(options: TestAppOptions = {}) {
   const ownerSessions = createPublicSessionsRepositoryFake();
   const cookie = { secureCookies: false, sessionTtlMs: 60_000 };
   const ownerCookie = { secureCookies: false, sessionTtlMs: OWNER_SESSION_TTL_MS };
+
+  const enqueuedNotifications: Array<{ id: string; retryCount: number }> = [];
+  let notificationQueueFails = false;
+  const notificationQueue: NotificationQueue = {
+    async enqueue(notificationId: string, retryCount: number): Promise<void> {
+      if (notificationQueueFails) {
+        throw new Error('Redis no disponible');
+      }
+
+      enqueuedNotifications.push({ id: notificationId, retryCount });
+    },
+  };
 
   const auth = createAuthService({
     staff,
@@ -168,6 +183,13 @@ export function buildTestApp(options: TestAppOptions = {}) {
       now: () => now,
     }),
     notifications: notifier,
+    notificationAdmin: createNotificationAdminService({
+      jobs: notificationJobs,
+      queue: notificationQueue,
+      audit,
+      logger: silentLogger,
+      enabled: options.notificationsEnabled ?? true,
+    }),
     whatsappWebhook: createWhatsappWebhookService({
       appSecret: WEBHOOK_APP_SECRET,
       verifyToken: WEBHOOK_VERIFY_TOKEN,
@@ -192,6 +214,10 @@ export function buildTestApp(options: TestAppOptions = {}) {
     audit,
     notifier,
     notificationJobs,
+    enqueuedNotifications,
+    failNotificationQueue(): void {
+      notificationQueueFails = true;
+    },
     ownerAuth,
     ownerSessions,
     ownerCookie,

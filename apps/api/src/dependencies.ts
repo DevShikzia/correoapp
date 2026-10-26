@@ -18,10 +18,13 @@ import { createMailService } from './modules/mail/mail.service.js';
 import { createBullNotificationQueue } from './modules/notifications/notification-queue.js';
 import { notificationRepository } from './modules/notifications/notification.repository.js';
 import type { MailNotifier } from './modules/notifications/notification.service.js';
+import type { NotificationQueue } from './modules/notifications/notification.service.js';
 import {
   createDisabledNotifier,
   createNotificationService,
 } from './modules/notifications/notification.service.js';
+import type { NotificationAdminService } from './modules/notifications/notification-admin.service.js';
+import { createNotificationAdminService } from './modules/notifications/notification-admin.service.js';
 import type { WhatsappWebhookService } from './modules/notifications/whatsapp-webhook.service.js';
 import { createWhatsappWebhookService } from './modules/notifications/whatsapp-webhook.service.js';
 import { createRequireOwnerAuth } from './modules/public/owner-auth.middleware.js';
@@ -49,6 +52,7 @@ export interface AppDependencies {
   staff: StaffService;
   mail: MailService;
   notifications: MailNotifier;
+  notificationAdmin: NotificationAdminService;
   whatsappWebhook: WhatsappWebhookService;
   ownerAuth: OwnerAuthService;
   ownerMail: OwnerMailService;
@@ -59,17 +63,48 @@ export interface AppDependencies {
   allowedOrigin: string | undefined;
 }
 
-function createNotifier(): MailNotifier {
+const UNAVAILABLE_QUEUE: NotificationQueue = {
+  async enqueue(): Promise<void> {
+    throw new Error('La cola de notificaciones no está habilitada');
+  },
+};
+
+interface NotificationDependencies {
+  notifier: MailNotifier;
+  admin: NotificationAdminService;
+}
+
+function createNotificationDependencies(): NotificationDependencies {
   if (!env.NOTIFICATIONS_ENABLED || env.REDIS_URL === undefined) {
-    return createDisabledNotifier();
+    return {
+      notifier: createDisabledNotifier(),
+      admin: createNotificationAdminService({
+        jobs: notificationRepository,
+        queue: UNAVAILABLE_QUEUE,
+        audit: auditRepository,
+        logger,
+        enabled: false,
+      }),
+    };
   }
 
-  return createNotificationService({
-    jobs: notificationRepository,
-    queue: createBullNotificationQueue(env.REDIS_URL, logger),
-    logger,
-    enabled: true,
-  });
+  const queue = createBullNotificationQueue(env.REDIS_URL, logger);
+
+  return {
+    notifier: createNotificationService({
+      jobs: notificationRepository,
+      queue,
+      logger,
+      enabled: true,
+    }),
+    admin: createNotificationAdminService({
+      jobs: notificationRepository,
+      queue,
+      audit: auditRepository,
+      logger,
+      enabled: true,
+    }),
+  };
 }
 
 export function createDefaultDependencies(): AppDependencies {
@@ -116,7 +151,7 @@ export function createDefaultDependencies(): AppDependencies {
     dummyPasswordHash: DUMMY_SECRET_HASH,
   });
 
-  const notifier = createNotifier();
+  const { notifier, admin: notificationAdmin } = createNotificationDependencies();
   const whatsappWebhook = createWhatsappWebhookService({
     appSecret: env.WHATSAPP_APP_SECRET,
     verifyToken: env.WHATSAPP_WEBHOOK_VERIFY_TOKEN,
@@ -146,6 +181,7 @@ export function createDefaultDependencies(): AppDependencies {
       now: () => new Date(),
     }),
     notifications: notifier,
+    notificationAdmin,
     whatsappWebhook,
     ownerAuth,
     ownerMail: createOwnerMailService({ mail: mailRepository }),

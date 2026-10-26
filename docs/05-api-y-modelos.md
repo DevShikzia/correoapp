@@ -40,9 +40,14 @@ Solo usuarios autorizados pueden usar endpoints internos. Validar transiciones d
 ## Auditoría y notificaciones
 - Las acciones relevantes se registran en `AuditLog` (`mail.created`, `mail.delivered`, etc.).
 - `GET/POST /webhooks/whatsapp` — `GET` responde el challenge de verificación de Meta; `POST` valida la firma `X-Hub-Signature-256`, el formato y la idempotencia de los estados.
-- `POST /notifications/:id/retry` — reenvío manual solo para admin; queda para la Fase 7.
+- `GET /notifications?status=&page=&limit=` — solo admin; lista avisos con el teléfono enmascarado y filtro por estado.
+- `POST /notifications/:id/retry` — solo admin; reencola un aviso `failed` o `pending`. Responde `409` para `queued`/`sending`/`sent` y `503` si Redis falla (el aviso vuelve a `pending`).
 
 La API guarda la correspondencia, la audita y recién después crea avisos durables (`NotificationJob`) y los encola en BullMQ. Un fallo de Redis o del proveedor no revierte el alta. El worker es un proceso separado y usa un modelo espejo de `NotificationJob`.
+
+El reintento es atómico (`findOneAndUpdate` condicional por estado), reinicia `attempts`, limpia `lastErrorCode` e incrementa `retryCount`. El alta usa `jobId = notificationId`; cada reintento usa `<id>-r<n>` porque BullMQ rechaza `:` en los jobIds personalizados y descarta un `add` con un id ya completado.
+
+El worker reconcilia al arrancar y cada 5 minutos: reencola avisos `pending` con más de 2 minutos. No toca `queued` ni `sending` porque el mensaje pudo salir sin confirmación; esos quedan visibles en el listado para revisión manual.
 
 El aviso solo lleva el número de lote: no se envía la descripción, el PIN ni otros datos de la correspondencia. El webhook actualiza `status`, `providerStatus`, `providerMessageId` y `lastErrorCode` sin confiar en datos del cliente.
 
@@ -53,7 +58,7 @@ El aviso solo lleva el número de lote: no se envía la descripción, el PIN ni 
 - `MailItem` copia el número de lote al registrar para listar sin joins; el número de lote no se modifica después de crearlo.
 - Índice TTL en `PublicSession.expiresAt`.
 - `PublicSession` guarda solo el hash SHA-256 del token y tiene índice único por `tokenHash`; el token en claro solo viaja en la cookie.
-- `NotificationJob` tiene índice único `{ mailItemId, phone }` para no duplicar avisos y un índice por `status + createdAt`. No guarda la descripción de la correspondencia.
+- `NotificationJob` tiene índice único `{ mailItemId, phone }` para no duplicar avisos y un índice por `status + createdAt`. No guarda la descripción de la correspondencia. `retryCount` distingue los reintentos manuales en el `jobId`.
 - Índices de auditoría por `createdAt` y `lotId + createdAt`.
 - No confiar en IDs recibidos: validar formato y autorización.
 - Aplicar paginación y límites máximos.
