@@ -12,6 +12,7 @@
 .env.*
 !.env.example
 .admin-password
+NOTAS-LOCALES.md
 *.log
 logs
 backups
